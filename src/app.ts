@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono, type RouteHandler } from "@hono/zod-openapi";
 import { requireTimeEditAuth, type AuthVars } from "./middleware/auth.js";
@@ -43,6 +44,8 @@ app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   description:
     "TimeEdit `teauthtoken` JWT. Obtain one via `POST /api/auth/login`, then send it as `Authorization: Bearer <token>` on every protected API request.",
 });
+
+app.use("*", cors());
 
 app.use("/api/*", async (c, next) => {
   if (c.req.method === "POST" && new URL(c.req.url).pathname === "/api/auth/login") {
