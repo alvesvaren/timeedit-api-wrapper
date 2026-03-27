@@ -7,6 +7,7 @@ export {
   listBookingsHandler,
 } from "./bookings.js";
 export {
+  allRoomSchedulesHandler,
   roomAvailabilityFromQuery,
   roomScheduleHandler,
 } from "./room-schedule.js";

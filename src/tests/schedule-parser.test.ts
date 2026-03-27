@@ -4,11 +4,13 @@ import { describe, expect, test } from "vitest";
 import {
   intervalsOverlapHalfOpen,
   parseBookingDivTitle,
+  parseLocalScheduleIso,
   parseRoomWeekScheduleHtml,
 } from "../parsers/schedule.js";
 
 const harPath = path.join(
   process.cwd(),
+  "dumps",
   "cloud.timeedit.net_Archive [26-03-27 13-36-43].har"
 );
 
@@ -34,6 +36,14 @@ describe("schedule parser", () => {
     });
   });
 
+  test("parseLocalScheduleIso", () => {
+    expect(parseLocalScheduleIso("2026-03-23T08:15:00")).toEqual({
+      date: "2026-03-23",
+      time: "08:15",
+    });
+    expect(parseLocalScheduleIso("bad")).toBeNull();
+  });
+
   test("intervalsOverlapHalfOpen", () => {
     expect(intervalsOverlapHalfOpen("11:00", "12:00", "11:30", "12:30")).toBe(
       true
@@ -53,8 +63,9 @@ describe("schedule parser", () => {
     expect(entry?.response?.content?.text).toBeDefined();
     const schedule = parseRoomWeekScheduleHtml(entry!.response.content.text!);
     expect(schedule.bookingRules).toContain("Grupprum");
-    expect(schedule.days.length).toBe(7);
-    const mon = schedule.days.find((d) => d.date === "2026-03-23");
-    expect(mon?.busy.length).toBeGreaterThan(0);
+    expect(schedule.gridDates.length).toBe(7);
+    const mon = schedule.bookings.filter((b) => b.start.startsWith("2026-03-23"));
+    expect(mon.length).toBeGreaterThan(0);
+    expect(mon[0]!.start).toMatch(/^2026-03-23T\d{2}:\d{2}:00$/);
   });
 });

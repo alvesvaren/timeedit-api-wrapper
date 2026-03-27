@@ -2,6 +2,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono, type RouteHandler } from "@hono/zod-openapi";
 import { requireTimeEditAuth, type AuthVars } from "./middleware/auth.js";
 import {
+  allRoomSchedulesRoute,
   createBookingRoute,
   deleteBookingRoute,
   listBookingsRoute,
@@ -14,6 +15,7 @@ import {
   deleteBookingById,
   listBookingsHandler,
   listRoomsHandler,
+  allRoomSchedulesHandler,
   roomAvailabilityFromQuery,
   roomScheduleHandler,
 } from "./routes/index.js";
@@ -49,6 +51,15 @@ app.openapi(listRoomsRoute, ((c) => listRoomsHandler(c)) as RouteHandler<
   typeof listRoomsRoute,
   { Variables: AuthVars }
 >);
+
+const allSchedulesOpenApiHandler: RouteHandler<
+  typeof allRoomSchedulesRoute,
+  { Variables: AuthVars }
+> = (c) => {
+  const q = c.req.valid("query");
+  return allRoomSchedulesHandler(c, q);
+};
+app.openapi(allRoomSchedulesRoute, allSchedulesOpenApiHandler);
 
 const roomScheduleOpenApiHandler: RouteHandler<
   typeof roomScheduleRoute,
@@ -121,6 +132,7 @@ app.get("/", (c) => {
     note: "All /api/* routes require Authorization: Bearer <TimeEdit JWT>",
     endpoints: [
       "GET /api/rooms",
+      "GET /api/schedules",
       "GET /api/rooms/{roomId}/schedule",
       "GET /api/rooms/{roomId}/availability",
       "GET/POST /api/bookings",

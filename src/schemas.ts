@@ -99,21 +99,27 @@ export const RoomIdParamsSchema = z.object({
     }),
 });
 
-export const BusyIntervalSchema = z
+export const ScheduleBookingSchema = z
   .object({
-    startTime: z.string().openapi({ example: "08:00" }),
-    endTime: z.string().openapi({ example: "10:00" }),
+    start: z
+      .string()
+      .openapi({
+        format: "date-time",
+        example: "2026-03-23T08:00:00",
+        description:
+          "Interval start (naive local wall time, `YYYY-MM-DDTHH:mm:ss`, same timezone as TimeEdit).",
+      }),
+    end: z
+      .string()
+      .openapi({
+        format: "date-time",
+        example: "2026-03-23T10:00:00",
+        description: "Interval end (same format as `start`; half-open semantics match the grid).",
+      }),
     reservationId: z.string().optional().openapi({ example: "174803" }),
     label: z.string().optional().openapi({ example: "Övrigt" }),
   })
-  .openapi("BusyInterval");
-
-export const ScheduleDaySchema = z
-  .object({
-    date: z.string().openapi({ example: "2026-03-23" }),
-    busy: z.array(BusyIntervalSchema),
-  })
-  .openapi("ScheduleDay");
+  .openapi("ScheduleBooking");
 
 export const RoomWeekScheduleSchema = z
   .object({
@@ -127,23 +133,114 @@ export const RoomWeekScheduleSchema = z
         description:
           "TimeEdit policy text (e.g. max bookings per 14 days, must enter within 30 minutes).",
       }),
-    days: z.array(ScheduleDaySchema),
+    bookings: z
+      .array(ScheduleBookingSchema)
+      .openapi({
+        description:
+          "All blocked intervals in the loaded week, sorted by `start` (derive calendar days from `start` / `end`).",
+      }),
   })
   .openapi("RoomWeekSchedule");
 
+export const WeekOffsetQuerySchema = z
+  .string()
+  .regex(/^-?\d+$/)
+  .transform(Number)
+  .pipe(z.number().int().min(-6).max(10))
+  .optional()
+  .default(0)
+  .openapi({
+    param: { name: "weekOffset", in: "query", required: false },
+    type: "string",
+    example: "0",
+    description: "Week offset: 0 = current, 1 = next, -1 = previous. Range: -6 to +10.",
+  });
+
 export const ScheduleQuerySchema = z.object({
-  weekOffset: z
+  weekOffset: WeekOffsetQuerySchema,
+});
+
+export const RoomWithScheduleSchema = RoomSchema.extend({
+  bookings: z.array(ScheduleBookingSchema),
+}).openapi("RoomWithSchedule");
+
+export const ScheduleFetchErrorSchema = z
+  .object({
+    roomId: z.string(),
+    detail: z.string(),
+  })
+  .openapi("ScheduleFetchError");
+
+export const AllRoomSchedulesSchema = z
+  .object({
+    weekOffset: z.number().openapi({ example: 0 }),
+    bookingRules: z.string(),
+    filters: z
+      .object({
+        campus: z.string().optional(),
+        q: z.string().optional(),
+        roomIds: z.array(z.string()).optional(),
+      })
+      .openapi({
+        description: "Normalized filters applied (subset may be omitted if unused).",
+      }),
+    rooms: z.array(RoomWithScheduleSchema),
+    errors: z
+      .array(ScheduleFetchErrorSchema)
+      .optional()
+      .openapi({
+        description:
+          "Per-room upstream/parse failures (other rooms in `rooms` are still returned).",
+      }),
+  })
+  .openapi("AllRoomSchedules");
+
+export type AllRoomSchedulesResponse = z.infer<typeof AllRoomSchedulesSchema>;
+
+export const AllSchedulesQuerySchema = z.object({
+  weekOffset: WeekOffsetQuerySchema,
+  campus: z
     .string()
-    .regex(/^-?\d+$/)
-    .transform(Number)
-    .pipe(z.number().int().min(-6).max(10))
+    .min(1)
+    .max(200)
     .optional()
-    .default(0)
     .openapi({
-      param: { name: "weekOffset", in: "query", required: false },
-      type: "string",
-      example: "0",
-      description: "Week offset: 0 = current, 1 = next, -1 = previous. Range: -6 to +10.",
+      param: { name: "campus", in: "query", required: false },
+      example: "Johanneberg",
+      description: "Case-insensitive substring match on `campus` (same field as GET /api/rooms).",
+    }),
+  q: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .openapi({
+      param: { name: "q", in: "query", required: false },
+      example: "KG",
+      description: "Case-insensitive substring match on room name (`name`).",
+    }),
+  roomIds: z
+    .string()
+    .max(4000)
+    .optional()
+    .transform((s) => {
+      if (!s?.trim()) return undefined;
+      return s
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+    })
+    .pipe(
+      z
+        .array(z.string().min(1).regex(/^\d+$/))
+        .max(100)
+        .optional()
+    )
+    .openapi({
+      param: { name: "roomIds", in: "query", required: false },
+      example: "485,486",
+      description:
+        "Optional comma-separated TimeEdit room ids; result is intersected with filters (order follows the room list).",
     }),
 });
 
@@ -181,15 +278,15 @@ export const RoomAvailabilitySchema = z
     date: z.string(),
     startTime: z.string(),
     endTime: z.string(),
-    conflicts: z.array(BusyIntervalSchema).openapi({
-      description: "Bookings that overlap the requested interval (only when `dateInLoadedWeek`).",
+    conflicts: z.array(ScheduleBookingSchema).openapi({
+      description: "Booked slots that overlap the requested interval (only when `dateInLoadedWeek`).",
     }),
     hint: z
       .string()
       .optional()
       .openapi({
         example:
-          "Pick a date listed under GET /api/rooms/{roomId}/schedule → days[].date.",
+          "Use a date in the same loaded week as GET /api/rooms/{roomId}/schedule (see booking `start` dates) or adjust `weekOffset`.",
       }),
   })
   .openapi("RoomAvailability");

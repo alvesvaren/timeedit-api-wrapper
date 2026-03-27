@@ -22,6 +22,47 @@ const bookingDate = process.env.E2E_BOOKING_DATE ?? defaultBookingDate();
 describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
   const authHeader = { Authorization: `Bearer ${token}` };
 
+  test("GET /api/schedules returns all room week grids", async () => {
+    const roomsRes = await app.request("/api/rooms", { headers: authHeader });
+    expect(roomsRes.status).toBe(200);
+    const listed = (await roomsRes.json()) as Array<{ id: string }>;
+
+    const res = await app.request("/api/schedules", { headers: authHeader });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      weekOffset: number;
+      bookingRules: string;
+      rooms: Array<{ id: string; name: string; bookings: unknown[] }>;
+      errors?: unknown[];
+    };
+    expect(data.weekOffset).toBe(0);
+    expect(data.bookingRules.length).toBeGreaterThan(20);
+    expect(data.rooms).toHaveLength(listed.length);
+    for (const r of data.rooms) {
+      expect(r.id).toBeTruthy();
+      expect(r.name).toBeTruthy();
+      expect(Array.isArray(r.bookings)).toBe(true);
+      for (const b of r.bookings as Array<{ start: string; end: string }>) {
+        expect(b.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+        expect(b.end).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+      }
+    }
+    if (data.errors?.length) {
+      throw new Error(`Unexpected schedule fetch errors: ${JSON.stringify(data.errors)}`);
+    }
+  });
+
+  test("GET /api/schedules filters by roomIds", async () => {
+    const res = await app.request(
+      `/api/schedules?roomIds=${encodeURIComponent(testRoomId)}`,
+      { headers: authHeader }
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { rooms: Array<{ id: string }> };
+    expect(data.rooms).toHaveLength(1);
+    expect(data.rooms[0]!.id).toBe(testRoomId);
+  });
+
   test("GET /api/rooms returns rooms", async () => {
     const res = await app.request("/api/rooms", { headers: authHeader });
     expect(res.status).toBe(200);
@@ -86,6 +127,11 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
 describe("auth required", () => {
   test("GET /api/rooms without token returns 401", async () => {
     const res = await app.request("/api/rooms");
+    expect(res.status).toBe(401);
+  });
+
+  test("GET /api/schedules without token returns 401", async () => {
+    const res = await app.request("/api/schedules");
     expect(res.status).toBe(401);
   });
 });

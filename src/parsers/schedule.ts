@@ -1,26 +1,27 @@
 import { parse } from "node-html-parser";
 
-export type BusyInterval = {
-  startTime: string;
-  endTime: string;
+/** One blocked slot from the week grid; `start` / `end` are naive local datetimes `YYYY-MM-DDTHH:mm:ss` (institution wall clock). */
+export type ScheduleBooking = {
+  start: string;
+  end: string;
   reservationId?: string;
   label?: string;
 };
 
-export type ScheduleDay = {
-  date: string;
-  busy: BusyInterval[];
-};
-
-export type RoomWeekSchedule = {
-  /** Swedish policy text from TimeEdit (when/how group rooms may be booked). */
+/** Full parse result; `gridDates` is for server-side logic only (empty days have no bookings). */
+export type ParsedRoomViewSchedule = {
   bookingRules: string;
-  days: ScheduleDay[];
+  bookings: ScheduleBooking[];
+  gridDates: string[];
 };
 
 function normalizeTime(t: string): string {
   const [h, m] = t.split(":");
   return `${h!.padStart(2, "0")}:${m}`;
+}
+
+function toLocalIso(date: string, hhmm: string): string {
+  return `${date}T${normalizeTime(hhmm)}:00`;
 }
 
 /**
@@ -54,10 +55,17 @@ function compactDayToIso(compact: string): string | null {
   return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
 }
 
+/** Parse naive local `YYYY-MM-DDTHH:mm:ss` from the schedule API. */
+export function parseLocalScheduleIso(iso: string): { date: string; time: string } | null {
+  const m = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2}):(\d{2})$/);
+  if (!m) return null;
+  return { date: m[1]!, time: normalizeTime(m[2]!) };
+}
+
 /**
  * Parse the week grid HTML returned by `ri.html` (single room in `objects`).
  */
-export function parseRoomWeekScheduleHtml(html: string): RoomWeekSchedule {
+export function parseRoomWeekScheduleHtml(html: string): ParsedRoomViewSchedule {
   const root = parse(html, { blockTextElements: { script: true, style: true } });
 
   const rulesEl = root.querySelector("div.textHTML");
@@ -68,33 +76,32 @@ export function parseRoomWeekScheduleHtml(html: string): RoomWeekSchedule {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  const days: ScheduleDay[] = [];
+  const gridDates: string[] = [];
+  const bookings: ScheduleBooking[] = [];
 
   for (const wd of root.querySelectorAll("div.weekDay[data-day]")) {
     const compact = wd.getAttribute("data-day") ?? "";
     const date = compactDayToIso(compact);
     if (!date) continue;
+    gridDates.push(date);
 
-    const busy: BusyInterval[] = [];
     for (const node of wd.querySelectorAll("div.bookingDiv[title]")) {
       const title = node.getAttribute("title") ?? "";
       const parsed = parseBookingDivTitle(title);
       if (!parsed || parsed.date !== date) continue;
-      busy.push({
-        startTime: parsed.startTime,
-        endTime: parsed.endTime,
+      bookings.push({
+        start: toLocalIso(parsed.date, parsed.startTime),
+        end: toLocalIso(parsed.date, parsed.endTime),
         reservationId: parsed.reservationId,
         label: parsed.label,
       });
     }
-
-    busy.sort((a, b) => a.startTime.localeCompare(b.startTime));
-    days.push({ date, busy });
   }
 
-  days.sort((a, b) => a.date.localeCompare(b.date));
+  gridDates.sort((a, b) => a.localeCompare(b));
+  bookings.sort((a, b) => a.start.localeCompare(b.start));
 
-  return { bookingRules, days };
+  return { bookingRules, bookings, gridDates };
 }
 
 export function timeToMinutes(hhmm: string): number {
