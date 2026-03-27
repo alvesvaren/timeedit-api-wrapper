@@ -1,17 +1,10 @@
 import { parse } from "node-html-parser";
-
-/** One blocked slot from the week grid; `start` / `end` are naive local datetimes `YYYY-MM-DDTHH:mm:ss` (institution wall clock). */
-export type ScheduleBooking = {
-  start: string;
-  end: string;
-  reservationId?: string;
-  label?: string;
-};
+import type { RoomCalendarSlot } from "../entities.js";
 
 /** Full parse result; `gridDates` is for server-side logic only (empty days have no bookings). */
 export type ParsedRoomViewSchedule = {
   bookingRules: string;
-  bookings: ScheduleBooking[];
+  bookings: RoomCalendarSlot[];
   gridDates: string[];
 };
 
@@ -77,7 +70,7 @@ export function parseRoomWeekScheduleHtml(html: string): ParsedRoomViewSchedule 
     .trim();
 
   const gridDates: string[] = [];
-  const bookings: ScheduleBooking[] = [];
+  const bookings: RoomCalendarSlot[] = [];
 
   for (const wd of root.querySelectorAll("div.weekDay[data-day]")) {
     const compact = wd.getAttribute("data-day") ?? "";

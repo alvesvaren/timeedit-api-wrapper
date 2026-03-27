@@ -22,12 +22,12 @@ const bookingDate = process.env.E2E_BOOKING_DATE ?? defaultBookingDate();
 describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
   const authHeader = { Authorization: `Bearer ${token}` };
 
-  test("GET /api/schedules returns all room week grids", async () => {
+  test("GET /api/bookings returns all room week grids", async () => {
     const roomsRes = await app.request("/api/rooms", { headers: authHeader });
     expect(roomsRes.status).toBe(200);
     const listed = (await roomsRes.json()) as Array<{ id: string }>;
 
-    const res = await app.request("/api/schedules", { headers: authHeader });
+    const res = await app.request("/api/bookings", { headers: authHeader });
     expect(res.status).toBe(200);
     const data = (await res.json()) as {
       weekOffset: number;
@@ -52,9 +52,9 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
     }
   });
 
-  test("GET /api/schedules filters by roomIds", async () => {
+  test("GET /api/bookings filters by roomIds", async () => {
     const res = await app.request(
-      `/api/schedules?roomIds=${encodeURIComponent(testRoomId)}`,
+      `/api/bookings?roomIds=${encodeURIComponent(testRoomId)}`,
       { headers: authHeader }
     );
     expect(res.status).toBe(200);
@@ -77,8 +77,8 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
 
   let reservationId: string;
 
-  test("POST /api/bookings creates a booking", async () => {
-    const res = await app.request("/api/bookings", {
+  test("POST /api/my/bookings creates a booking", async () => {
+    const res = await app.request("/api/my/bookings", {
       method: "POST",
       headers: { ...authHeader, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -94,20 +94,29 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
       console.error(await res.text());
     }
     expect(res.status).toBe(200);
-    const data = (await res.json()) as { reservationId?: string };
-    expect(data.reservationId).toBeDefined();
-    reservationId = data.reservationId!;
+    const data = (await res.json()) as { booking?: { id?: string } };
+    expect(data.booking?.id).toBeDefined();
+    reservationId = data.booking!.id!;
   });
 
-  test("GET /api/bookings includes new booking", async () => {
-    const res = await app.request("/api/bookings", { headers: authHeader });
+  test("GET /api/my/bookings includes new booking", async () => {
+    const res = await app.request("/api/my/bookings", { headers: authHeader });
     expect(res.status).toBe(200);
-    const list = (await res.json()) as Array<{ id: string }>;
-    expect(list.some((b) => b.id === reservationId)).toBe(true);
+    const list = (await res.json()) as Array<{
+      id: string;
+      start: string;
+      end: string;
+      room: { name: string };
+    }>;
+    const row = list.find((b) => b.id === reservationId);
+    expect(row).toBeDefined();
+    expect(row!.start).toBe(`${bookingDate}T07:15:00`);
+    expect(row!.end).toBe(`${bookingDate}T08:15:00`);
+    expect(row!.room.name.length).toBeGreaterThan(0);
   });
 
-  test("DELETE /api/bookings/:id cancels", async () => {
-    const res = await app.request(`/api/bookings/${reservationId}`, {
+  test("DELETE /api/my/bookings/:id cancels", async () => {
+    const res = await app.request(`/api/my/bookings/${reservationId}`, {
       method: "DELETE",
       headers: authHeader,
     });
@@ -116,11 +125,11 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
     expect(data.success).toBe(true);
   });
 
-  test("GET /api/bookings no longer lists cancelled booking", async () => {
-    const res = await app.request("/api/bookings", { headers: authHeader });
+  test("GET /api/my/bookings no longer lists cancelled booking", async () => {
+    const res = await app.request("/api/my/bookings", { headers: authHeader });
     expect(res.status).toBe(200);
     const list = (await res.json()) as Array<{ id: string }>;
-    expect(list.some((b) => b.id === reservationId)).toBe(false);
+    expect(list.find((b) => b.id === reservationId)).toBeUndefined();
   });
 });
 
@@ -130,8 +139,13 @@ describe("auth required", () => {
     expect(res.status).toBe(401);
   });
 
-  test("GET /api/schedules without token returns 401", async () => {
-    const res = await app.request("/api/schedules");
+  test("GET /api/bookings without token returns 401", async () => {
+    const res = await app.request("/api/bookings");
+    expect(res.status).toBe(401);
+  });
+
+  test("GET /api/my/bookings without token returns 401", async () => {
+    const res = await app.request("/api/my/bookings");
     expect(res.status).toBe(401);
   });
 });

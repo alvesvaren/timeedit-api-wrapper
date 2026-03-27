@@ -1,8 +1,8 @@
 import type { Context } from "hono";
 import type { AuthVars } from "../middleware/auth.js";
-import type { ScheduleBooking } from "../parsers/schedule.js";
+import type { RoomCalendarSlot } from "../entities.js";
 import { parseRoomWeekScheduleHtml } from "../parsers/schedule.js";
-import type { AllRoomSchedulesResponse, Room } from "../schemas.js";
+import type { AllRoomsBookingsResponse, Room } from "../schemas.js";
 import { fetchGroupRooms, fetchRoomWeekGridHtml } from "../timeedit.js";
 import { mapGroupRoomObjects } from "./rooms.js";
 
@@ -21,16 +21,16 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>
   return out;
 }
 
-export type AllSchedulesQuery = {
+export type AllBookingsQuery = {
   weekOffset: number;
   campus?: string;
   q?: string;
   roomIds?: string[];
 };
 
-export async function allRoomSchedulesHandler(
+export async function allRoomBookingsHandler(
   c: Context<{ Variables: AuthVars }>,
-  q: AllSchedulesQuery
+  q: AllBookingsQuery
 ) {
   const sessionCookie = c.get("sessionCookie");
   const weekOffset = q.weekOffset;
@@ -55,7 +55,7 @@ export async function allRoomSchedulesHandler(
     }
 
     type FetchOutcome =
-      | { ok: true; room: Room; bookings: ScheduleBooking[]; bookingRules: string }
+      | { ok: true; room: Room; bookings: RoomCalendarSlot[]; bookingRules: string }
       | { ok: false; roomId: string; detail: string };
 
     const outcomes = await mapPool(rooms, SCHEDULE_FETCH_CONCURRENCY, async (room) => {
@@ -75,7 +75,7 @@ export async function allRoomSchedulesHandler(
     });
 
     let bookingRules = "";
-    const okRows: Array<Room & { bookings: ScheduleBooking[] }> = [];
+    const okRows: Array<Room & { bookings: RoomCalendarSlot[] }> = [];
     const errors: Array<{ roomId: string; detail: string }> = [];
 
     for (const o of outcomes) {
@@ -97,14 +97,14 @@ export async function allRoomSchedulesHandler(
     if (!bookingRules && okRows.length === 0 && errors.length === rooms.length && rooms.length > 0) {
       return c.json(
         {
-          error: "Failed to load schedules for all rooms",
+          error: "Failed to load room bookings for all rooms",
           detail: errors.map((e) => `${e.roomId}: ${e.detail}`).join("; "),
         },
         502
       );
     }
 
-    const body: AllRoomSchedulesResponse = {
+    const body: AllRoomsBookingsResponse = {
       weekOffset,
       bookingRules,
       filters: {
@@ -119,6 +119,6 @@ export async function allRoomSchedulesHandler(
     return c.json(body, 200);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return c.json({ error: "Failed to load room schedules", detail: message }, 502);
+    return c.json({ error: "Failed to load room bookings", detail: message }, 502);
   }
 }

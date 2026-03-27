@@ -1,7 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import {
-  AllRoomSchedulesSchema,
-  AllSchedulesQuerySchema,
+  AllBookingsQuerySchema,
+  AllRoomsBookingsSchema,
   BookingIdParamsSchema,
   BookingSchema,
   RoomSchema,
@@ -10,6 +10,7 @@ import {
   gatewayErrorSchema,
   reservationCreatedSchema,
   unauthorizedSchema,
+  validationErrorSchema,
 } from "./schemas.js";
 
 const bearerSecurity = [{ Bearer: [] }];
@@ -38,21 +39,21 @@ export const listRoomsRoute = createRoute({
   },
 });
 
-export const allRoomSchedulesRoute = createRoute({
+export const allRoomBookingsRoute = createRoute({
   method: "get",
-  path: "/api/schedules",
+  path: "/api/bookings",
   security: bearerSecurity,
   tags: ["Rooms"],
-  summary: "Week grids for all rooms",
+  summary: "Week booking grids for all rooms",
   description:
-    "Loads the same group-room list as GET /api/rooms, applies optional filters (campus, name substring, explicit ids), then returns flat `bookings` (ISO local start/end per slot) for every matching room. Each room uses its own TimeEdit `ri.html` request. Fetches run concurrently in small batches server-side.",
+    "Loads the same group-room list as GET /api/rooms, applies optional filters (campus, name substring, explicit ids), then returns flat `bookings` (ISO local start/end per busy slot) for every matching room. Each room uses its own TimeEdit `ri.html` request. Fetches run concurrently in small batches server-side.",
   request: {
-    query: AllSchedulesQuerySchema,
+    query: AllBookingsQuerySchema,
   },
   responses: {
     200: {
-      description: "Booking rules (shared) plus schedule per room; optional per-room errors",
-      content: { "application/json": { schema: AllRoomSchedulesSchema } },
+      description: "Booking rules (shared) plus busy intervals per room; optional per-room errors",
+      content: { "application/json": { schema: AllRoomsBookingsSchema } },
     },
     401: {
       description: "Missing or invalid Authorization header",
@@ -65,11 +66,11 @@ export const allRoomSchedulesRoute = createRoute({
   },
 });
 
-export const listBookingsRoute = createRoute({
+export const listMyBookingsRoute = createRoute({
   method: "get",
-  path: "/api/bookings",
+  path: "/api/my/bookings",
   security: bearerSecurity,
-  tags: ["Bookings"],
+  tags: ["My bookings"],
   summary: "List my bookings",
   responses: {
     200: {
@@ -87,11 +88,11 @@ export const listBookingsRoute = createRoute({
   },
 });
 
-export const createBookingRoute = createRoute({
+export const createMyBookingRoute = createRoute({
   method: "post",
-  path: "/api/bookings",
+  path: "/api/my/bookings",
   security: bearerSecurity,
-  tags: ["Bookings"],
+  tags: ["My bookings"],
   summary: "Book a group room",
   request: {
     body: {
@@ -105,17 +106,14 @@ export const createBookingRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Reservation created; `reservationId` is the TimeEdit booking id",
+      description: "Created booking; `booking.id` is the TimeEdit reservation id",
       content: { "application/json": { schema: reservationCreatedSchema } },
     },
     400: {
       description: "Invalid request body",
       content: {
         "application/json": {
-          schema: z.object({
-            error: z.string(),
-            issues: z.record(z.string(), z.unknown()).optional(),
-          }),
+          schema: validationErrorSchema,
         },
       },
     },
@@ -130,11 +128,11 @@ export const createBookingRoute = createRoute({
   },
 });
 
-export const deleteBookingRoute = createRoute({
+export const deleteMyBookingRoute = createRoute({
   method: "delete",
-  path: "/api/bookings/{id}",
+  path: "/api/my/bookings/{id}",
   security: bearerSecurity,
-  tags: ["Bookings"],
+  tags: ["My bookings"],
   summary: "Cancel a booking",
   request: {
     params: BookingIdParamsSchema,

@@ -39,7 +39,7 @@ export async function createBookingFromInput(
       title: input.title,
       comment: input.comment,
     });
-    return c.json({ reservationId }, 200);
+    return c.json({ booking: { id: reservationId } }, 200);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return c.json({ error: "Booking failed", detail: message }, 502);

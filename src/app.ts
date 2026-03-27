@@ -2,18 +2,18 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono, type RouteHandler } from "@hono/zod-openapi";
 import { requireTimeEditAuth, type AuthVars } from "./middleware/auth.js";
 import {
-  allRoomSchedulesRoute,
-  createBookingRoute,
-  deleteBookingRoute,
-  listBookingsRoute,
+  allRoomBookingsRoute,
+  createMyBookingRoute,
+  deleteMyBookingRoute,
+  listMyBookingsRoute,
   listRoomsRoute,
 } from "./openapi-routes.js";
 import {
+  allRoomBookingsHandler,
   createBookingFromInput,
   deleteBookingById,
   listBookingsHandler,
   listRoomsHandler,
-  allRoomSchedulesHandler,
 } from "./routes/index.js";
 
 const app = new OpenAPIHono<{ Variables: AuthVars }>({
@@ -48,37 +48,37 @@ app.openapi(listRoomsRoute, ((c) => listRoomsHandler(c)) as RouteHandler<
   { Variables: AuthVars }
 >);
 
-const allSchedulesOpenApiHandler: RouteHandler<
-  typeof allRoomSchedulesRoute,
+const allRoomBookingsOpenApiHandler: RouteHandler<
+  typeof allRoomBookingsRoute,
   { Variables: AuthVars }
 > = (c) => {
   const q = c.req.valid("query");
-  return allRoomSchedulesHandler(c, q);
+  return allRoomBookingsHandler(c, q);
 };
-app.openapi(allRoomSchedulesRoute, allSchedulesOpenApiHandler);
+app.openapi(allRoomBookingsRoute, allRoomBookingsOpenApiHandler);
 
-app.openapi(listBookingsRoute, ((c) => listBookingsHandler(c)) as RouteHandler<
-  typeof listBookingsRoute,
+app.openapi(listMyBookingsRoute, ((c) => listBookingsHandler(c)) as RouteHandler<
+  typeof listMyBookingsRoute,
   { Variables: AuthVars }
 >);
 
-const createBookingOpenApiHandler: RouteHandler<
-  typeof createBookingRoute,
+const createMyBookingOpenApiHandler: RouteHandler<
+  typeof createMyBookingRoute,
   { Variables: AuthVars }
 > = (c) => {
   const body = c.req.valid("json");
   return createBookingFromInput(c, body);
 };
-app.openapi(createBookingRoute, createBookingOpenApiHandler);
+app.openapi(createMyBookingRoute, createMyBookingOpenApiHandler);
 
-const deleteBookingOpenApiHandler: RouteHandler<
-  typeof deleteBookingRoute,
+const deleteMyBookingOpenApiHandler: RouteHandler<
+  typeof deleteMyBookingRoute,
   { Variables: AuthVars }
 > = (c) => {
   const { id } = c.req.valid("param");
   return deleteBookingById(c, id);
 };
-app.openapi(deleteBookingRoute, deleteBookingOpenApiHandler);
+app.openapi(deleteMyBookingRoute, deleteMyBookingOpenApiHandler);
 
 app.doc31("/openapi", {
   openapi: "3.1.0",
@@ -91,9 +91,12 @@ app.doc31("/openapi", {
   tags: [
     {
       name: "Rooms",
-      description: "List rooms and week schedules (busy times)",
+      description: "List rooms and week booking grids (busy intervals per room)",
     },
-    { name: "Bookings", description: "List, create, and cancel reservations" },
+    {
+      name: "My bookings",
+      description: "List, create, and cancel your TimeEdit reservations",
+    },
   ],
 });
 
@@ -108,9 +111,10 @@ app.get("/", (c) => {
     note: "All /api/* routes require Authorization: Bearer <TimeEdit JWT>",
     endpoints: [
       "GET /api/rooms",
-      "GET /api/schedules",
-      "GET/POST /api/bookings",
-      "DELETE /api/bookings/{id}",
+      "GET /api/bookings",
+      "GET /api/my/bookings",
+      "POST /api/my/bookings",
+      "DELETE /api/my/bookings/{id}",
     ],
   });
 });

@@ -46,10 +46,9 @@ export function parseMyBookingsHtml(html: string): Booking[] {
 
     bookings.push({
       id,
-      date,
-      startTime: normalizeTime(startTime),
-      endTime: normalizeTime(endTime),
-      roomName,
+      start: toNaiveLocalIso(date, startTime),
+      end: toNaiveLocalIso(date, endTime),
+      room: { name: roomName },
       createdAt,
     });
   }
@@ -60,4 +59,9 @@ export function parseMyBookingsHtml(html: string): Booking[] {
 function normalizeTime(t: string): string {
   const [h, m] = t.split(":");
   return `${h!.padStart(2, "0")}:${m}`;
+}
+
+/** `YYYY-MM-DD` + `H:mm` → `YYYY-MM-DDTHH:mm:00` (TimeEdit naive local convention). */
+function toNaiveLocalIso(date: string, hhmm: string): string {
+  return `${date}T${normalizeTime(hhmm)}:00`;
 }

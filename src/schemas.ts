@@ -1,29 +1,34 @@
+/**
+ * API request/response and query Zod schemas, composed from {@link ./entities.js}.
+ */
 import { z } from "@hono/zod-openapi";
+import {
+  ReservationCreatedSchema,
+  RoomCalendarSlotSchema,
+  RoomSchema,
+} from "./entities.js";
 
-export const RoomSchema = z
-  .object({
-    id: z.string().openapi({ example: "485" }),
-    name: z.string().openapi({ example: "KG34" }),
-    capacity: z.number().nullable().openapi({ example: 8 }),
-    equipment: z.string().openapi({ example: "Whiteboard" }),
-    campus: z.string().openapi({ example: "Johanneberg" }),
-  })
-  .openapi("Room");
+export {
+  BookingIntervalSchema,
+  BookingSchema,
+  CreatedBookingSchema,
+  NaiveLocalDateTimeSchema,
+  ReservationCreatedSchema,
+  RoomCalendarSlotSchema,
+  RoomRefSchema,
+  RoomSchema,
+} from "./entities.js";
 
-export type Room = z.infer<typeof RoomSchema>;
+export type {
+  Booking,
+  BookingInterval,
+  CreatedBooking,
+  Room,
+  RoomCalendarSlot,
+  RoomRef,
+} from "./entities.js";
 
-export const BookingSchema = z
-  .object({
-    id: z.string().openapi({ example: "182700" }),
-    date: z.string().openapi({ example: "2026-03-28" }),
-    startTime: z.string().openapi({ example: "11:15" }),
-    endTime: z.string().openapi({ example: "12:15" }),
-    roomName: z.string().openapi({ example: "KG34" }),
-    createdAt: z.string().openapi({ example: "2026-03-27 13:36" }),
-  })
-  .openapi("Booking");
-
-export type Booking = z.infer<typeof BookingSchema>;
+export const reservationCreatedSchema = ReservationCreatedSchema;
 
 export const createBookingSchema = z
   .object({
@@ -46,12 +51,6 @@ export const createBookingSchema = z
   .openapi("CreateBookingRequest");
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
-
-export const reservationCreatedSchema = z
-  .object({
-    reservationId: z.string().openapi({ example: "182700" }),
-  })
-  .openapi("ReservationCreated");
 
 export const cancelSuccessSchema = z
   .object({
@@ -89,27 +88,42 @@ export const BookingIdParamsSchema = z.object({
     }),
 });
 
-export const ScheduleBookingSchema = z
+export const RoomWithBookingsSchema = RoomSchema.extend({
+  bookings: z.array(RoomCalendarSlotSchema),
+}).openapi("RoomWithBookings");
+
+export const RoomBookingsFetchErrorSchema = z
   .object({
-    start: z
-      .string()
-      .openapi({
-        format: "date-time",
-        example: "2026-03-23T08:00:00",
-        description:
-          "Interval start (naive local wall time, `YYYY-MM-DDTHH:mm:ss`, same timezone as TimeEdit).",
-      }),
-    end: z
-      .string()
-      .openapi({
-        format: "date-time",
-        example: "2026-03-23T10:00:00",
-        description: "Interval end (same format as `start`; half-open semantics match the grid).",
-      }),
-    reservationId: z.string().optional().openapi({ example: "174803" }),
-    label: z.string().optional().openapi({ example: "Övrigt" }),
+    roomId: z.string(),
+    detail: z.string(),
   })
-  .openapi("ScheduleBooking");
+  .openapi("RoomBookingsFetchError");
+
+export const AllRoomsBookingsSchema = z
+  .object({
+    weekOffset: z.number().openapi({ example: 0 }),
+    bookingRules: z.string(),
+    filters: z
+      .object({
+        campus: z.string().optional(),
+        q: z.string().optional(),
+        roomIds: z.array(z.string()).optional(),
+      })
+      .openapi({
+        description: "Normalized filters applied (subset may be omitted if unused).",
+      }),
+    rooms: z.array(RoomWithBookingsSchema),
+    errors: z
+      .array(RoomBookingsFetchErrorSchema)
+      .optional()
+      .openapi({
+        description:
+          "Per-room upstream/parse failures (other rooms in `rooms` are still returned).",
+      }),
+  })
+  .openapi("AllRoomsBookings");
+
+export type AllRoomsBookingsResponse = z.infer<typeof AllRoomsBookingsSchema>;
 
 export const WeekOffsetQuerySchema = z
   .string()
@@ -125,44 +139,7 @@ export const WeekOffsetQuerySchema = z
     description: "Week offset: 0 = current, 1 = next, -1 = previous. Range: -6 to +10.",
   });
 
-export const RoomWithScheduleSchema = RoomSchema.extend({
-  bookings: z.array(ScheduleBookingSchema),
-}).openapi("RoomWithSchedule");
-
-export const ScheduleFetchErrorSchema = z
-  .object({
-    roomId: z.string(),
-    detail: z.string(),
-  })
-  .openapi("ScheduleFetchError");
-
-export const AllRoomSchedulesSchema = z
-  .object({
-    weekOffset: z.number().openapi({ example: 0 }),
-    bookingRules: z.string(),
-    filters: z
-      .object({
-        campus: z.string().optional(),
-        q: z.string().optional(),
-        roomIds: z.array(z.string()).optional(),
-      })
-      .openapi({
-        description: "Normalized filters applied (subset may be omitted if unused).",
-      }),
-    rooms: z.array(RoomWithScheduleSchema),
-    errors: z
-      .array(ScheduleFetchErrorSchema)
-      .optional()
-      .openapi({
-        description:
-          "Per-room upstream/parse failures (other rooms in `rooms` are still returned).",
-      }),
-  })
-  .openapi("AllRoomSchedules");
-
-export type AllRoomSchedulesResponse = z.infer<typeof AllRoomSchedulesSchema>;
-
-export const AllSchedulesQuerySchema = z.object({
+export const AllBookingsQuerySchema = z.object({
   weekOffset: WeekOffsetQuerySchema,
   campus: z
     .string()

@@ -6,4 +6,4 @@ export {
   deleteBookingHandler,
   listBookingsHandler,
 } from "./bookings.js";
-export { allRoomSchedulesHandler } from "./room-schedule.js";
+export { allRoomBookingsHandler } from "./room-schedule.js";
