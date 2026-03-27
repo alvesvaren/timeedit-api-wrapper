@@ -4,8 +4,10 @@ import type { LoginInput } from "../schemas.js";
 import { exchangeJwtForSessionCookie } from "../timeedit.js";
 
 const USER_AGENT = "Mozilla/5.0 (compatible; timeedit-api-wrapper/1.0)";
-const CHALMERS_SSO_START_URL =
-  "https://idp.chalmers.se/adfs/ls/?SAMLRequest=nZJPbxoxEMW%2FiuU768Vk%2F1ksiAaqIqUtCiSHXiLjHYpVr009szT59lWWrppcOOQ68zy%2F92Y8nT%2B3jp0hog2%2B5uMk5fPZFHXrTmrR0dHfw%2B8OkNhz6zyqvlHzLnoVNFpUXreAiozaLr7eKZmk6hQDBRMcZ%2BtlzZ%2FAFIe8yqu8rPLSAMAk3Tc3sjRlMS4gS6tGF9nNATh7HEzIJOVsjdjB2iNpTzWXqcxH6WQki52UaiJVViVZmf3gbPMP98n6xvqf173tLyJUX3a7zWjzfbvjbAlI1mvq0UeiEyohbHNKzFG7FiImCEI3BxQOBWcLRIiv4tvgsWshbiGerYGH%2B7v%2Fz3VHx4RsC9BYSjyQOI%2F7IniyRhMIo53ba%2FNLrB6eVqvtnF%2BWrvrY8c22rwfSgxs%2BG9jGha55Dx%2BSTMUbxnDlb7qF9XITnDUvH7nywrnw5zaCJqg5xQ44%2Bxxiq%2Bn6gNeKbUaHXqooao8WPHExu7h8%2FfxeQtZ2yCf4Iejofx9HQe3tRxiPkgGQNvhGLmLHIuu4fEQ0TyzlAW4jN%2Fe3fhqk7InltnQE2at%2BIAqAWdWzs2zanLEnaDmzPJGrgG438exEjDDbAVbldMGJXv%2FifYx0jD24Qzqr5DGQTVxqZa40ro%3D";
+const AUTH_API_BASE = "https://auth.timeedit.net/v1";
+const CHALMERS_ORGANIZATION_ID = "684f3b8411589f19111506a7";
+const CHALMERS_SSO_AUTH_CONFIG_ID = "683434756602fa50c998c81d";
+const CHALMERS_REGION = "EU_EES";
 
 type CookieJar = Map<string, string>;
 
@@ -23,8 +25,9 @@ export async function loginHandler(c: Context, body: LoginInput) {
 
 async function loginWithChalmersSso(username: string, password: string): Promise<string> {
   const jar: CookieJar = new Map();
+  const startUrl = await fetchChalmersSsoStartUrl();
 
-  const loginPage = await fetchWithCookies(CHALMERS_SSO_START_URL, {
+  const loginPage = await fetchWithCookies(startUrl, {
     headers: {
       "User-Agent": USER_AGENT,
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -89,6 +92,36 @@ async function loginWithChalmersSso(username: string, password: string): Promise
     throw new Error("TimeEdit success redirect did not contain a token");
   }
   return token;
+}
+
+async function fetchChalmersSsoStartUrl(): Promise<string> {
+  const url = new URL(
+    `${AUTH_API_BASE}/organizations/${CHALMERS_ORGANIZATION_ID}/authenticate`
+  );
+  url.search = new URLSearchParams({
+    organizationId: CHALMERS_ORGANIZATION_ID,
+    appId: "",
+    language: "en",
+    context: "",
+    authConfigId: CHALMERS_SSO_AUTH_CONFIG_ID,
+    region: CHALMERS_REGION,
+  }).toString();
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Referer: "https://www.timeedit.net/",
+    },
+    redirect: "manual",
+  });
+
+  const location = res.headers.get("location");
+  if (!location) {
+    throw new Error("TimeEdit auth start did not return an SSO redirect URL");
+  }
+
+  return new URL(location, url).toString();
 }
 
 function parseForm(
