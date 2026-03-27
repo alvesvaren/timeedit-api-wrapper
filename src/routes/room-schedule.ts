@@ -107,11 +107,6 @@ export async function allRoomBookingsHandler(
     const body: AllRoomsBookingsResponse = {
       weekOffset,
       bookingRules,
-      filters: {
-        ...(q.campus?.trim() ? { campus: q.campus.trim() } : {}),
-        ...(q.q?.trim() ? { q: q.q.trim() } : {}),
-        ...(q.roomIds?.length ? { roomIds: q.roomIds } : {}),
-      },
       rooms: okRows,
       ...(errors.length ? { errors } : {}),
     };

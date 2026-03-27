@@ -103,15 +103,6 @@ export const AllRoomsBookingsSchema = z
   .object({
     weekOffset: z.number().openapi({ example: 0 }),
     bookingRules: z.string(),
-    filters: z
-      .object({
-        campus: z.string().optional(),
-        q: z.string().optional(),
-        roomIds: z.array(z.string()).optional(),
-      })
-      .openapi({
-        description: "Normalized filters applied (subset may be omitted if unused).",
-      }),
     rooms: z.array(RoomWithBookingsSchema),
     errors: z
       .array(RoomBookingsFetchErrorSchema)
@@ -121,7 +112,10 @@ export const AllRoomsBookingsSchema = z
           "Per-room upstream/parse failures (other rooms in `rooms` are still returned).",
       }),
   })
-  .openapi("AllRoomsBookings");
+  .openapi("AllRoomsBookings", {
+    description:
+      "Aggregate week grid. `rooms[]` items are `RoomWithBookings` (`Room` + `RoomCalendarSlot[]`); see components/schemas.",
+  });
 
 export type AllRoomsBookingsResponse = z.infer<typeof AllRoomsBookingsSchema>;
 
@@ -182,6 +176,6 @@ export const AllBookingsQuerySchema = z.object({
       param: { name: "roomIds", in: "query", required: false },
       example: "485,486",
       description:
-        "Optional comma-separated TimeEdit room ids; result is intersected with filters (order follows the room list).",
+        "Optional comma-separated TimeEdit room ids; combined with campus and q query params (order follows the room list).",
     }),
 });

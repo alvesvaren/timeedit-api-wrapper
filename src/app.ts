@@ -100,7 +100,16 @@ app.doc31("/openapi", {
   ],
 });
 
-app.get("/swagger", swaggerUI({ url: "/openapi" }));
+app.get(
+  "/swagger",
+  swaggerUI({
+    url: "/openapi",
+    docExpansion: "list",
+    /** Keeps nested models as collapsible refs in the docs instead of one huge inline tree. */
+    defaultModelsExpandDepth: 1,
+    defaultModelExpandDepth: 1,
+  })
+);
 
 app.get("/", (c) => {
   const origin = new URL(c.req.url).origin;
