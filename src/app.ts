@@ -7,6 +7,7 @@ import {
   deleteMyBookingRoute,
   listMyBookingsRoute,
   listRoomsRoute,
+  loginRoute,
 } from "./openapi-routes.js";
 import {
   allRoomBookingsHandler,
@@ -15,6 +16,7 @@ import {
   listBookingsHandler,
   listRoomsHandler,
 } from "./routes/index.js";
+import { loginHandler } from "./routes/auth.js";
 
 const app = new OpenAPIHono<{ Variables: AuthVars }>({
   defaultHook: (result, c) => {
@@ -38,10 +40,23 @@ app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   scheme: "bearer",
   bearerFormat: "JWT",
   description:
-    "TimeEdit `teauthtoken` JWT (same as used by cloud.timeedit.net after login). Exchanged server-side for a session cookie; not stored.",
+    "TimeEdit `teauthtoken` JWT. Obtain one via `POST /api/auth/login`, then send it as `Authorization: Bearer <token>` on every protected API request.",
 });
 
-app.use("/api/*", requireTimeEditAuth);
+app.use("/api/*", async (c, next) => {
+  if (c.req.method === "POST" && new URL(c.req.url).pathname === "/api/auth/login") {
+    return next();
+  }
+  return requireTimeEditAuth(c, next);
+});
+
+app.openapi(
+  loginRoute,
+  ((c) => {
+    const json = c.req.valid("json");
+    return loginHandler(c, json);
+  }) as RouteHandler<typeof loginRoute, { Variables: AuthVars }>
+);
 
 app.openapi(listRoomsRoute, ((c) => listRoomsHandler(c)) as RouteHandler<
   typeof listRoomsRoute,
@@ -86,9 +101,14 @@ app.doc31("/openapi", {
     title: "TimeEdit API Wrapper",
     version: "1.0.0",
     description:
-      "Stateless Chalmers group-room wrapper over TimeEdit. Send `Authorization: Bearer <your TimeEdit JWT>` on every request.",
+      "Stateless Chalmers group-room wrapper over TimeEdit. Obtain a token with `POST /api/auth/login`, then send `Authorization: Bearer <token>` on protected routes.",
   },
   tags: [
+    {
+      name: "Auth",
+      description:
+        "Chalmers SSO login; returns a TimeEdit JWT for `Authorization: Bearer` on other `/api/*` endpoints",
+    },
     {
       name: "Rooms",
       description: "List rooms and week booking grids (busy intervals per room)",
@@ -117,11 +137,12 @@ app.get("/", (c) => {
     service: "timeedit-api-wrapper",
     swagger: `${origin}/swagger`,
     openApiJson: `${origin}/openapi`,
-    note: "All /api/* routes require Authorization: Bearer <TimeEdit JWT>",
+    note: "API documentation lives in Swagger; `POST /api/auth/login` returns a JWT for `Authorization: Bearer` on protected routes.",
     endpoints: [
-      "GET /api/rooms",
-      "GET /api/bookings",
-      "GET /api/my/bookings",
+      "POST /api/auth/login  – stateless SSO login, returns JWT (see Swagger)",
+      "GET  /api/rooms",
+      "GET  /api/bookings",
+      "GET  /api/my/bookings",
       "POST /api/my/bookings",
       "DELETE /api/my/bookings/{id}",
     ],

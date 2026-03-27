@@ -134,6 +134,15 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
 });
 
 describe("auth required", () => {
+  test("POST /api/auth/login without token is not blocked by bearer middleware", async () => {
+    const res = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
   test("GET /api/rooms without token returns 401", async () => {
     const res = await app.request("/api/rooms");
     expect(res.status).toBe(401);

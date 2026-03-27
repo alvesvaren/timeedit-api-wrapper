@@ -8,12 +8,52 @@ import {
   cancelSuccessSchema,
   createBookingSchema,
   gatewayErrorSchema,
+  loginFailedSchema,
+  loginRequestSchema,
+  loginSuccessSchema,
   reservationCreatedSchema,
   unauthorizedSchema,
   validationErrorSchema,
 } from "./schemas.js";
 
 const bearerSecurity = [{ Bearer: [] }];
+
+export const loginRoute = createRoute({
+  method: "post",
+  path: "/api/auth/login",
+  tags: ["Auth"],
+  summary: "Log in (Chalmers SSO)",
+  description:
+    "Stateless login via Chalmers ADFS: returns a TimeEdit JWT. The server exchanges it once for a session cookie on success. Use the token as `Authorization: Bearer <token>` on all other `/api/*` endpoints.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: loginRequestSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      description: "JWT issued; safe to use as Bearer token",
+      content: { "application/json": { schema: loginSuccessSchema } },
+    },
+    400: {
+      description: "Invalid or missing JSON body / fields",
+      content: {
+        "application/json": {
+          schema: validationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: "SSO rejected credentials or upstream flow failed",
+      content: { "application/json": { schema: loginFailedSchema } },
+    },
+  },
+});
 
 export const listRoomsRoute = createRoute({
   method: "get",

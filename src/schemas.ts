@@ -78,6 +78,30 @@ export const gatewayErrorSchema = z
   })
   .openapi("GatewayError");
 
+export const loginRequestSchema = z
+  .object({
+    username: z.string().trim().min(1).openapi({ example: "cid@chalmers.se" }),
+    password: z.string().min(1).openapi({ example: "your-password" }),
+  })
+  .openapi("LoginRequest");
+
+export type LoginInput = z.infer<typeof loginRequestSchema>;
+
+export const loginSuccessSchema = z
+  .object({
+    token: z.string().openapi({
+      description: "TimeEdit `teauthtoken` JWT. Send as `Authorization: Bearer <token>` on protected `/api/*` routes.",
+    }),
+  })
+  .openapi("LoginSuccess");
+
+export const loginFailedSchema = z
+  .object({
+    error: z.literal("Login failed"),
+    detail: z.string(),
+  })
+  .openapi("LoginFailed");
+
 export const BookingIdParamsSchema = z.object({
   id: z
     .string()
