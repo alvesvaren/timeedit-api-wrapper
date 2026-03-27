@@ -2,14 +2,9 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   AllRoomSchedulesSchema,
   AllSchedulesQuerySchema,
-  AvailabilityQuerySchema,
   BookingIdParamsSchema,
   BookingSchema,
-  RoomAvailabilitySchema,
-  RoomIdParamsSchema,
   RoomSchema,
-  RoomWeekScheduleSchema,
-  ScheduleQuerySchema,
   cancelSuccessSchema,
   createBookingSchema,
   gatewayErrorSchema,
@@ -58,62 +53,6 @@ export const allRoomSchedulesRoute = createRoute({
     200: {
       description: "Booking rules (shared) plus schedule per room; optional per-room errors",
       content: { "application/json": { schema: AllRoomSchedulesSchema } },
-    },
-    401: {
-      description: "Missing or invalid Authorization header",
-      content: { "application/json": { schema: unauthorizedSchema } },
-    },
-    502: {
-      description: "TimeEdit or parse error",
-      content: { "application/json": { schema: gatewayErrorSchema } },
-    },
-  },
-});
-
-export const roomScheduleRoute = createRoute({
-  method: "get",
-  path: "/api/rooms/{roomId}/schedule",
-  security: bearerSecurity,
-  tags: ["Rooms"],
-  summary: "Week grid (busy intervals)",
-  description:
-    "Loads the weekly schedule for a single room: policy text and flat `bookings` with naive local `start`/`end` datetimes. Use `weekOffset` for other weeks (0 = current, 1 = next, -1 = previous, etc.).",
-  request: {
-    params: RoomIdParamsSchema,
-    query: ScheduleQuerySchema,
-  },
-  responses: {
-    200: {
-      description: "Policy text and sorted `bookings`",
-      content: { "application/json": { schema: RoomWeekScheduleSchema } },
-    },
-    401: {
-      description: "Missing or invalid Authorization header",
-      content: { "application/json": { schema: unauthorizedSchema } },
-    },
-    502: {
-      description: "TimeEdit or parse error",
-      content: { "application/json": { schema: gatewayErrorSchema } },
-    },
-  },
-});
-
-export const roomAvailabilityRoute = createRoute({
-  method: "get",
-  path: "/api/rooms/{roomId}/availability",
-  security: bearerSecurity,
-  tags: ["Rooms"],
-  summary: "Check if a slot is free",
-  description:
-    "Uses the same week grid as `schedule` and tests overlap with existing `bookings`. If `dateInLoadedWeek` is false, the date is outside the loaded week—shift `weekOffset` or use a day in the same week as the schedule response.",
-  request: {
-    params: RoomIdParamsSchema,
-    query: AvailabilityQuerySchema,
-  },
-  responses: {
-    200: {
-      description: "Availability result and any conflicting bookings",
-      content: { "application/json": { schema: RoomAvailabilitySchema } },
     },
     401: {
       description: "Missing or invalid Authorization header",

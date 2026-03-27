@@ -7,8 +7,6 @@ import {
   deleteBookingRoute,
   listBookingsRoute,
   listRoomsRoute,
-  roomAvailabilityRoute,
-  roomScheduleRoute,
 } from "./openapi-routes.js";
 import {
   createBookingFromInput,
@@ -16,8 +14,6 @@ import {
   listBookingsHandler,
   listRoomsHandler,
   allRoomSchedulesHandler,
-  roomAvailabilityFromQuery,
-  roomScheduleHandler,
 } from "./routes/index.js";
 
 const app = new OpenAPIHono<{ Variables: AuthVars }>({
@@ -61,26 +57,6 @@ const allSchedulesOpenApiHandler: RouteHandler<
 };
 app.openapi(allRoomSchedulesRoute, allSchedulesOpenApiHandler);
 
-const roomScheduleOpenApiHandler: RouteHandler<
-  typeof roomScheduleRoute,
-  { Variables: AuthVars }
-> = (c) => {
-  const { roomId } = c.req.valid("param");
-  const { weekOffset } = c.req.valid("query");
-  return roomScheduleHandler(c, roomId, weekOffset);
-};
-app.openapi(roomScheduleRoute, roomScheduleOpenApiHandler);
-
-const roomAvailabilityOpenApiHandler: RouteHandler<
-  typeof roomAvailabilityRoute,
-  { Variables: AuthVars }
-> = (c) => {
-  const { roomId } = c.req.valid("param");
-  const q = c.req.valid("query");
-  return roomAvailabilityFromQuery(c, roomId, q);
-};
-app.openapi(roomAvailabilityRoute, roomAvailabilityOpenApiHandler);
-
 app.openapi(listBookingsRoute, ((c) => listBookingsHandler(c)) as RouteHandler<
   typeof listBookingsRoute,
   { Variables: AuthVars }
@@ -115,7 +91,7 @@ app.doc31("/openapi", {
   tags: [
     {
       name: "Rooms",
-      description: "List rooms, week schedules (busy times), and slot availability",
+      description: "List rooms and week schedules (busy times)",
     },
     { name: "Bookings", description: "List, create, and cancel reservations" },
   ],
@@ -133,8 +109,6 @@ app.get("/", (c) => {
     endpoints: [
       "GET /api/rooms",
       "GET /api/schedules",
-      "GET /api/rooms/{roomId}/schedule",
-      "GET /api/rooms/{roomId}/availability",
       "GET/POST /api/bookings",
       "DELETE /api/bookings/{id}",
     ],

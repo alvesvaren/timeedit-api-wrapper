@@ -89,16 +89,6 @@ export const BookingIdParamsSchema = z.object({
     }),
 });
 
-export const RoomIdParamsSchema = z.object({
-  roomId: z
-    .string()
-    .min(1)
-    .openapi({
-      param: { name: "roomId", in: "path" },
-      example: "485",
-    }),
-});
-
 export const ScheduleBookingSchema = z
   .object({
     start: z
@@ -121,27 +111,6 @@ export const ScheduleBookingSchema = z
   })
   .openapi("ScheduleBooking");
 
-export const RoomWeekScheduleSchema = z
-  .object({
-    weekOffset: z.number().openapi({
-      description: "Week offset relative to current week (0 = this week, 1 = next, -1 = previous).",
-      example: 0,
-    }),
-    bookingRules: z
-      .string()
-      .openapi({
-        description:
-          "TimeEdit policy text (e.g. max bookings per 14 days, must enter within 30 minutes).",
-      }),
-    bookings: z
-      .array(ScheduleBookingSchema)
-      .openapi({
-        description:
-          "All blocked intervals in the loaded week, sorted by `start` (derive calendar days from `start` / `end`).",
-      }),
-  })
-  .openapi("RoomWeekSchedule");
-
 export const WeekOffsetQuerySchema = z
   .string()
   .regex(/^-?\d+$/)
@@ -155,10 +124,6 @@ export const WeekOffsetQuerySchema = z
     example: "0",
     description: "Week offset: 0 = current, 1 = next, -1 = previous. Range: -6 to +10.",
   });
-
-export const ScheduleQuerySchema = z.object({
-  weekOffset: WeekOffsetQuerySchema,
-});
 
 export const RoomWithScheduleSchema = RoomSchema.extend({
   bookings: z.array(ScheduleBookingSchema),
@@ -243,50 +208,3 @@ export const AllSchedulesQuerySchema = z.object({
         "Optional comma-separated TimeEdit room ids; result is intersected with filters (order follows the room list).",
     }),
 });
-
-export const AvailabilityQuerySchema = z.object({
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .openapi({
-      param: { name: "date", in: "query", required: true },
-      example: "2026-03-28",
-    }),
-  startTime: z
-    .string()
-    .regex(/^\d{1,2}:\d{2}$/)
-    .openapi({
-      param: { name: "startTime", in: "query", required: true },
-      example: "11:15",
-    }),
-  endTime: z
-    .string()
-    .regex(/^\d{1,2}:\d{2}$/)
-    .openapi({
-      param: { name: "endTime", in: "query", required: true },
-      example: "12:15",
-    }),
-});
-
-export const RoomAvailabilitySchema = z
-  .object({
-    /** Set only when `dateInLoadedWeek` is true; whether the room is free for this interval. */
-    available: z.boolean().optional().openapi({ example: true }),
-    /** False if the requested date is not in the week returned by TimeEdit (see `GET .../schedule`). */
-    dateInLoadedWeek: z.boolean(),
-    bookingRules: z.string(),
-    date: z.string(),
-    startTime: z.string(),
-    endTime: z.string(),
-    conflicts: z.array(ScheduleBookingSchema).openapi({
-      description: "Booked slots that overlap the requested interval (only when `dateInLoadedWeek`).",
-    }),
-    hint: z
-      .string()
-      .optional()
-      .openapi({
-        example:
-          "Use a date in the same loaded week as GET /api/rooms/{roomId}/schedule (see booking `start` dates) or adjust `weekOffset`.",
-      }),
-  })
-  .openapi("RoomAvailability");

@@ -1,19 +1,10 @@
 import type { Context } from "hono";
 import type { AuthVars } from "../middleware/auth.js";
 import type { ScheduleBooking } from "../parsers/schedule.js";
-import {
-  intervalsOverlapHalfOpen,
-  parseLocalScheduleIso,
-  parseRoomWeekScheduleHtml,
-} from "../parsers/schedule.js";
+import { parseRoomWeekScheduleHtml } from "../parsers/schedule.js";
 import type { AllRoomSchedulesResponse, Room } from "../schemas.js";
 import { fetchGroupRooms, fetchRoomWeekGridHtml } from "../timeedit.js";
 import { mapGroupRoomObjects } from "./rooms.js";
-
-function normTime(t: string): string {
-  const [h, m] = t.split(":");
-  return `${h!.padStart(2, "0")}:${m}`;
-}
 
 const SCHEDULE_FETCH_CONCURRENCY = 5;
 
@@ -129,83 +120,5 @@ export async function allRoomSchedulesHandler(
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return c.json({ error: "Failed to load room schedules", detail: message }, 502);
-  }
-}
-
-export async function roomScheduleHandler(
-  c: Context<{ Variables: AuthVars }>,
-  roomId: string,
-  weekOffset = 0
-) {
-  const sessionCookie = c.get("sessionCookie");
-  try {
-    const html = await fetchRoomWeekGridHtml(sessionCookie, roomId, weekOffset);
-    const parsed = parseRoomWeekScheduleHtml(html);
-    return c.json(
-      { weekOffset, bookingRules: parsed.bookingRules, bookings: parsed.bookings },
-      200
-    );
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return c.json({ error: "Failed to load room schedule", detail: message }, 502);
-  }
-}
-
-export type AvailabilityQuery = {
-  date: string;
-  startTime: string;
-  endTime: string;
-};
-
-export async function roomAvailabilityFromQuery(
-  c: Context<{ Variables: AuthVars }>,
-  roomId: string,
-  q: AvailabilityQuery
-) {
-  const sessionCookie = c.get("sessionCookie");
-  const startTime = normTime(q.startTime);
-  const endTime = normTime(q.endTime);
-
-  try {
-    const html = await fetchRoomWeekGridHtml(sessionCookie, roomId);
-    const schedule = parseRoomWeekScheduleHtml(html);
-    if (!schedule.gridDates.includes(q.date)) {
-      return c.json(
-        {
-          dateInLoadedWeek: false,
-          bookingRules: schedule.bookingRules,
-          date: q.date,
-          startTime,
-          endTime,
-          conflicts: [],
-          hint:
-            "This date is not a day column in the week TimeEdit returned (see GET schedule / booking `start` dates, or change `weekOffset`).",
-        },
-        200
-      );
-    }
-
-    const conflicts = schedule.bookings.filter((b) => {
-      const a = parseLocalScheduleIso(b.start);
-      const z = parseLocalScheduleIso(b.end);
-      if (!a || !z || a.date !== q.date) return false;
-      return intervalsOverlapHalfOpen(startTime, endTime, a.time, z.time);
-    });
-
-    return c.json(
-      {
-        available: conflicts.length === 0,
-        dateInLoadedWeek: true,
-        bookingRules: schedule.bookingRules,
-        date: q.date,
-        startTime,
-        endTime,
-        conflicts,
-      },
-      200
-    );
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return c.json({ error: "Failed to check availability", detail: message }, 502);
   }
 }
