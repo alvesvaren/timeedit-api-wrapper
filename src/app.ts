@@ -1,3 +1,4 @@
+import { Hono } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono, type RouteHandler } from "@hono/zod-openapi";
 import { requireTimeEditAuth, type AuthVars } from "./middleware/auth.js";
@@ -150,3 +151,4 @@ app.get("/", (c) => {
 });
 
 export { app };
+export default app;
