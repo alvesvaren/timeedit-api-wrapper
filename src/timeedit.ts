@@ -51,42 +51,62 @@ type ObjectsJson = {
     idAndType?: string;
     fields?: Record<string, string>;
   }>;
+  hasMore?: boolean;
 };
 
+const GROUP_ROOMS_PAGE_SIZE = 50;
+/** Guardrail if TimeEdit ever misreports hasMore */
+const GROUP_ROOMS_MAX_PAGES = 500;
+
 export async function fetchGroupRooms(sessionCookie: string) {
-  const params = new URLSearchParams({
-    max: "50",
-    fr: "f",
-    part: "t",
-    partajax: "t",
-    im: "f",
-    step: "1",
-    sid: "4",
-    l: "sv_SE",
-    ohg: "0",
-    types: "4",
-    subtypes: "4",
-  });
-  params.append("fe", "14.Grupprum");
-  params.append("fe", "48.Bokning lokaler normal (stud)");
+  const accumulated: NonNullable<ObjectsJson["objects"]> = [];
+  let start = 0;
+  let pageCount = 0;
 
-  const url = `${STUDENT}/objects.json?${params.toString()}`;
-  const res = await fetch(url, {
-    headers: {
-      Accept: "application/json, text/javascript, */*; q=0.01",
-      Cookie: sessionCookie,
-      "X-Requested-With": "XMLHttpRequest",
-      Referer: RESERVE_PAGE,
-      "User-Agent": timeEditUserAgent(),
-    },
-  });
+  while (pageCount < GROUP_ROOMS_MAX_PAGES) {
+    pageCount += 1;
+    const params = new URLSearchParams({
+      max: String(GROUP_ROOMS_PAGE_SIZE),
+      fr: "f",
+      part: "t",
+      partajax: "t",
+      im: "f",
+      step: "1",
+      sid: "4",
+      l: "sv_SE",
+      ohg: "0",
+      types: "4",
+      subtypes: "4",
+    });
+    if (start > 0) params.set("start", String(start));
+    params.append("fe", "14.Grupprum");
+    params.append("fe", "48.Bokning lokaler normal (stud)");
 
-  if (!res.ok) {
-    throw new Error(`TimeEdit objects.json failed: ${res.status} ${await res.text()}`);
+    const url = `${STUDENT}/objects.json?${params.toString()}`;
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json, text/javascript, */*; q=0.01",
+        Cookie: sessionCookie,
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: RESERVE_PAGE,
+        "User-Agent": timeEditUserAgent(),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`TimeEdit objects.json failed: ${res.status} ${await res.text()}`);
+    }
+
+    const data = (await res.json()) as ObjectsJson;
+    const pageObjs = data.objects ?? [];
+    accumulated.push(...pageObjs);
+
+    const hasMore = data.hasMore === true;
+    if (!hasMore || pageObjs.length === 0) break;
+    start += pageObjs.length;
   }
 
-  const data = (await res.json()) as ObjectsJson;
-  return data.objects ?? [];
+  return accumulated;
 }
 
 /**
