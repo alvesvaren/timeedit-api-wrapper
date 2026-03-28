@@ -78,9 +78,23 @@ export const gatewayErrorSchema = z
   })
   .openapi("GatewayError");
 
+const CHALMERS_CID_DOMAIN = "chalmers.se";
+
+export function normalizeLoginUsername(username: string): string {
+  if (!username.includes("@")) {
+    return `${username}@${CHALMERS_CID_DOMAIN}`;
+  }
+  return username;
+}
+
 export const loginRequestSchema = z
   .object({
-    username: z.string().trim().min(1).openapi({ example: "cid@chalmers.se" }),
+    username: z
+      .string()
+      .trim()
+      .min(1)
+      .transform(normalizeLoginUsername)
+      .openapi({ example: "cid@chalmers.se" }),
     password: z.string().min(1).openapi({ example: "your-password" }),
   })
   .openapi("LoginRequest");
