@@ -12,6 +12,8 @@ Nothing is stored on disk; each request uses the TimeEdit JWT you send, which th
 
 Log in with your Chalmers credentials; the response contains a TimeEdit JWT (`token`).
 
+**Why the server sees your password:** TimeEdit is a vendor product and Chalmers SSO is not exposed here as a public OAuth/OIDC client with a TimeEdit-specific scope. Until there is an official app registration for that, this wrapper has to complete the same browser-style SSO flow server-side—so credentials pass through the service. Use **HTTPS** in production, avoid logging request bodies, and do not persist passwords; only keep the returned token (short-lived; re-login when it expires).
+
 ```bash
 curl -sS -X POST http://localhost:3000/api/auth/login \
   -H 'Content-Type: application/json' \
@@ -35,7 +37,7 @@ curl -sS http://localhost:3000/api/rooms \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Treat the token like a session secret and use HTTPS in front of the service in any real deployment.
+**Bearer token:** Anyone who holds the JWT can act as you on these API routes until the token expires (lifetime is decided by TimeEdit, not this wrapper). Treat it like a password: secure storage on clients, never in URLs or shared logs, and assume compromise means full API access for that account—rotate by logging in again when needed.
 
 ## Development
 
