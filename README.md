@@ -1,12 +1,12 @@
 # TimeEdit API wrapper
 
-A small **stateless** HTTP service for Chalmers student-facing **TimeEdit Cloud** (`cloud.timeedit.net`). The API is **reverse engineered** from how the web UI talks to TimeEdit: it calls TimeEdit’s own endpoints and parses the same HTML/JSON where needed, then exposes a **simpler JSON API** for consumers (rooms, weekly busy grids, and your own reservations).
+A small stateless HTTP service for Chalmers student-facing **TimeEdit Cloud** (`cloud.timeedit.net`). The API is reverse engineered from how the web UI talks to TimeEdit: it calls TimeEdit’s own endpoints and parses the same HTML/JSON where needed, then exposes a simpler JSON API for consumers (rooms, weekly busy grids, and your own reservations).
 
 Nothing is stored on disk; each request uses the TimeEdit JWT you send, which the server exchanges for a short-lived session cookie the same way the browser does.
 
 ## How to use
 
-**Interactive docs:** start the server and open **Swagger UI** at [`/swagger`](http://localhost:3000/swagger). The OpenAPI spec is at [`/openapi`](http://localhost:3000/openapi). Use those for paths, schemas, and query parameters.
+**Interactive docs:** start the server and open **Swagger UI** at [`/swagger`](https://timeedit.svaren.dev/swagger). The OpenAPI spec is at [`/openapi`](https://timeedit.svaren.dev/openapi). Use those for paths, schemas, and query parameters.
 
 ### Authenticate
 
@@ -15,9 +15,9 @@ Log in with your Chalmers credentials; the response contains a TimeEdit JWT (`to
 **Why the server sees your password:** TimeEdit is a vendor product and Chalmers SSO is not exposed here as a public OAuth/OIDC client with a TimeEdit-specific scope. Until there is an official app registration for that, this wrapper has to complete the same browser-style SSO flow server-side—so credentials pass through the service. Use **HTTPS** in production, avoid logging request bodies, and do not persist passwords; only keep the returned token (short-lived; re-login when it expires).
 
 ```bash
-curl -sS -X POST http://localhost:3000/api/auth/login \
+curl -sS -X POST https://timeedit.svaren.dev/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"cid@chalmers.se","password":"your-password"}'
+  -d '{"username":"cid","password":"your-password"}'
 ```
 
 ### Call the API
@@ -33,15 +33,15 @@ Example:
 ```bash
 TOKEN='<paste token from login response>'
 
-curl -sS http://localhost:3000/api/rooms \
+curl -sS https://timeedit.svaren.dev/api/rooms \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-**Bearer token:** Anyone who holds the JWT can act as you on these API routes until the token expires (lifetime is decided by TimeEdit, not this wrapper). Treat it like a password: secure storage on clients, never in URLs or shared logs, and assume compromise means full API access for that account—rotate by logging in again when needed.
+**Bearer token:** Anyone who holds the JWT can act as you on these API routes until the token expires (lifetime is decided by TimeEdit, not this wrapper). Treat it like a password: secure storage on clients, never in URLs or shared logs, and assume compromise means full API access for that account while the token is active—rotate by logging in again when needed (At the time of writing, this is every 24h)
 
 ## Development
 
-**Requirements:** Node.js (LTS), **pnpm** (version in `package.json` → `packageManager`).
+**Requirements:** Node.js, **pnpm** (version in `package.json` → `packageManager`).
 
 ```bash
 pnpm install
@@ -50,7 +50,7 @@ pnpm build && pnpm start   # production-style
 pnpm test
 ```
 
-**Layout (high level):**
+**High level layout:**
 
 | Area | Role |
 | --- | --- |
@@ -66,4 +66,4 @@ End-to-end tests in `src/tests/e2e.test.ts` hit the real TimeEdit backend; they 
 
 ---
 
-**AI / maintenance disclaimer:** This project was largely **vibe-coded** with AI assistance. Do **not** rely on it for anything important without **testing and verifying** behaviour yourself—especially login flows, upstream HTML shapes, and Chalmers/TimeEdit changes that can break parsers or SSO without warning.
+**AI disclaimer:** This project was largely vibe-coded with AI assistance. Do **not** rely on it for anything important without **testing and verifying** behaviour yourself, especially login flows, upstream HTML shapes, and Chalmers/TimeEdit changes that can break parsers or SSO without warning. The E2E-tests in this repo will hopefully alert me if something breaks but there's no guarantee from me :)
