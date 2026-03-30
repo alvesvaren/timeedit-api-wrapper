@@ -4,20 +4,96 @@ import { app } from "../app.js";
 const token = process.env.TIMEEDIT_TOKEN;
 /** Room numeric id (objects.json id), e.g. "485" for KG34 */
 const testRoomId = process.env.E2E_ROOM_ID ?? "485";
-/**
- * ISO date YYYY-MM-DD for booking test (should be a day you can book, slot should be free).
- * Default: day after tomorrow in local time.
- */
-function defaultBookingDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 2);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+
+const STOCKHOLM_TZ = "Europe/Stockholm";
+
+function stockholmYmdParts(now: Date): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: STOCKHOLM_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const y = Number(parts.find((p) => p.type === "year")!.value);
+  const m = Number(parts.find((p) => p.type === "month")!.value);
+  const d = Number(parts.find((p) => p.type === "day")!.value);
+  return { y, m, d };
 }
 
-const bookingDate = process.env.E2E_BOOKING_DATE ?? defaultBookingDate();
+function addCalendarDays(y: number, m: number, d: number, delta: number): { y: number; m: number; d: number } {
+  const dt = new Date(Date.UTC(y, m - 1, d + delta));
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+
+function ymdToString(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Gregorian weekday 0=Sun .. 6=Sat for civil Y-M-D */
+function isSaturday(y: number, m: number, d: number): boolean {
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
+}
+
+function stockholmNowYmd(now: Date): string {
+  const { y, m, d } = stockholmYmdParts(now);
+  return ymdToString(y, m, d);
+}
+
+function stockholmHourMinute(now: Date): { h: number; min: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: STOCKHOLM_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  return {
+    h: Number(parts.find((p) => p.type === "hour")!.value),
+    min: Number(parts.find((p) => p.type === "minute")!.value),
+  };
+}
+
+/**
+ * True if civil `startHm` on `ymd` (Stockholm) is strictly after `now` in Stockholm.
+ */
+function isSlotStartInFuture(ymd: string, startHm: string, now: Date): boolean {
+  const nowYmd = stockholmNowYmd(now);
+  const [sh, sm] = startHm.split(":").map(Number);
+  const { h: ch, min: cmin } = stockholmHourMinute(now);
+  if (ymd > nowYmd) return true;
+  if (ymd < nowYmd) return false;
+  return sh > ch || (sh === ch && sm > cmin);
+}
+
+/**
+ * Next Saturday in Stockholm where 18:00–19:00 is still in the future.
+ * Saturday evening is usually free in the UI grid but remains bookable via the API.
+ */
+function defaultSaturdayEveningSlot(): { date: string; startTime: string; endTime: string } {
+  const startTime = "18:00";
+  const endTime = "19:00";
+  const now = new Date();
+  const { y: sy, m: sm, d: sd } = stockholmYmdParts(now);
+  for (let delta = 0; delta < 60; delta++) {
+    const { y, m, d } = addCalendarDays(sy, sm, sd, delta);
+    if (!isSaturday(y, m, d)) continue;
+    const date = ymdToString(y, m, d);
+    if (!isSlotStartInFuture(date, startTime, now)) continue;
+    return { date, startTime, endTime };
+  }
+  throw new Error("Could not find a future Saturday evening slot in the next 60 days");
+}
+
+const slot = process.env.E2E_BOOKING_DATE
+  ? {
+      date: process.env.E2E_BOOKING_DATE,
+      startTime: process.env.E2E_START_TIME ?? "18:00",
+      endTime: process.env.E2E_END_TIME ?? "19:00",
+    }
+  : defaultSaturdayEveningSlot();
+
+const bookingDate = slot.date;
+const bookingStartTime = slot.startTime;
+const bookingEndTime = slot.endTime;
 
 describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
   const authHeader = { Authorization: `Bearer ${token}` };
@@ -84,8 +160,8 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
       body: JSON.stringify({
         roomId: testRoomId,
         date: bookingDate,
-        startTime: "07:15",
-        endTime: "08:15",
+        startTime: bookingStartTime,
+        endTime: bookingEndTime,
         title: "e2e-api-wrapper",
         comment: "automated test",
       }),
@@ -110,8 +186,8 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
     }>;
     const row = list.find((b) => b.id === reservationId);
     expect(row).toBeDefined();
-    expect(row!.start).toBe(`${bookingDate}T07:15:00`);
-    expect(row!.end).toBe(`${bookingDate}T08:15:00`);
+    expect(row!.start).toBe(`${bookingDate}T${bookingStartTime}:00`);
+    expect(row!.end).toBe(`${bookingDate}T${bookingEndTime}:00`);
     expect(row!.room.name.length).toBeGreaterThan(0);
   });
 
