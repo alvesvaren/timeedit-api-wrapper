@@ -8,6 +8,8 @@ Nothing is stored on disk; each request uses the TimeEdit JWT you send, which th
 
 **Interactive docs:** start the server and open **Swagger UI** at [`/swagger`](https://timeedit.svaren.dev/swagger). The OpenAPI spec is at [`/openapi`](https://timeedit.svaren.dev/openapi). Use those for paths, schemas, and query parameters.
 
+**Hosted version:** this API is hosted by me at vercel and available at https://timeedit.svaren.dev, but as this does get sensitive login information for your entire chalmers account, do consider hosting it yourself!
+
 ### Authenticate
 
 Log in with your Chalmers credentials; the response contains a TimeEdit JWT (`token`).
