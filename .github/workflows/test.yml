@@ -13,8 +13,6 @@ concurrency:
 
 jobs:
   test:
-    # Fork PRs do not receive repository secrets; skip so credentials are never exposed to untrusted code.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
