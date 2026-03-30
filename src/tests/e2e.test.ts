@@ -53,15 +53,15 @@ function stockholmHourMinute(now: Date): { h: number; min: number } {
 }
 
 /**
- * True if the end of the slot (`endHm` on civil `ymd` in Stockholm) is still strictly after `now` in Stockholm.
+ * True if civil `startHm` on `ymd` (Stockholm) is strictly after `now` in Stockholm.
  */
-function isEndTimeInFuture(ymd: string, endHm: string, now: Date): boolean {
+function isSlotStartInFuture(ymd: string, startHm: string, now: Date): boolean {
   const nowYmd = stockholmNowYmd(now);
-  const [eh, em] = endHm.split(":").map(Number);
+  const [sh, sm] = startHm.split(":").map(Number);
   const { h: ch, min: cmin } = stockholmHourMinute(now);
   if (ymd > nowYmd) return true;
   if (ymd < nowYmd) return false;
-  return ch < eh || (ch === eh && cmin < em);
+  return sh > ch || (sh === ch && sm > cmin);
 }
 
 /**
@@ -77,7 +77,7 @@ function defaultSaturdayEveningSlot(): { date: string; startTime: string; endTim
     const { y, m, d } = addCalendarDays(sy, sm, sd, delta);
     if (!isSaturday(y, m, d)) continue;
     const date = ymdToString(y, m, d);
-    if (!isEndTimeInFuture(date, endTime, now)) continue;
+    if (!isSlotStartInFuture(date, startTime, now)) continue;
     return { date, startTime, endTime };
   }
   throw new Error("Could not find a future Saturday evening slot in the next 60 days");
