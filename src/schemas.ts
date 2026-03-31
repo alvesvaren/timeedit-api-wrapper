@@ -219,6 +219,6 @@ export const AllBookingsQuerySchema = z.object({
       param: { name: "roomIds", in: "query", required: false },
       example: "485,486",
       description:
-        "Optional comma-separated TimeEdit room ids; combined with campus and q query params (order follows the room list).",
+        "Optional comma-separated TimeEdit room ids; combined with campus and q query params (order follows the room list from TimeEdit objects.json).",
     }),
 });

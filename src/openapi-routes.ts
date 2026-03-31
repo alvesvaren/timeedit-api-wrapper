@@ -86,7 +86,7 @@ export const allRoomBookingsRoute = createRoute({
   tags: ["Rooms"],
   summary: "Week booking grids for all rooms",
   description:
-    "Loads the same group-room list as GET /api/rooms, applies optional filters, then returns a `rooms` array: each entry is a full room plus `bookings` (`interval`, optional `id`, optional `label`). `weekOffset` is query-only (not repeated in the body).",
+    "Loads the same group-room list as GET /api/rooms (TimeEdit `objects.json`), applies optional filters, then returns a `rooms` array: each entry is a full room plus `bookings` (`interval`, optional `id`, optional `label`). `weekOffset` is query-only (not repeated in the body).",
   request: {
     query: AllBookingsQuerySchema,
   },
