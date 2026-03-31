@@ -8,6 +8,8 @@ Nothing is stored on disk; each request uses the TimeEdit JWT you send, which th
 
 **Interactive docs:** start the server and open **Swagger UI** at [`/swagger`](https://timeedit.svaren.dev/swagger). The OpenAPI spec is at [`/openapi`](https://timeedit.svaren.dev/openapi). Use those for paths, schemas, and query parameters.
 
+**API 2.x (breaking):** `GET /api/rooms` returns a **JSON array** of rooms (each includes **`id`**). `GET /api/bookings` returns **`rooms`**: the same shape plus **`bookings`** with **`interval`** strings (`YYYY-MM-DDTHH:mm/HH:mm` or full end date when needed); no `weekOffset` in the body. **`POST /api/my/bookings`** expects **`roomId`** plus **`interval`** (end time or `PT…` duration). Wall times are **naive minutes** with nominal **`Europe/Stockholm`** semantics—see OpenAPI for details.
+
 **Hosted version:** this API is hosted by me at vercel and available at https://timeedit.svaren.dev, but as this does get sensitive login information for your entire chalmers account, do consider hosting it yourself!
 
 ### Authenticate
@@ -63,6 +65,7 @@ pnpm test
 | `src/routes/` | Handlers (auth, rooms, bookings, schedules) |
 | `src/middleware/auth.ts` | Bearer JWT → session cookie |
 | `src/parsers/` | HTML parsing for schedules and “my bookings” |
+| `src/timeedit-time.ts` | `Europe/Stockholm` helpers: minute ISO, interval formatting, create-interval parsing (incl. `PT…`) |
 
 End-to-end tests in `src/tests/e2e.test.ts` hit the real TimeEdit backend; they are skipped unless you set `TIMEEDIT_TOKEN` (see that file / `pnpm test:e2e`).
 

@@ -1,3 +1,5 @@
+import { parseLinksDataSidFromMyBookingsBootstrap } from "./parsers.js";
+
 /** Chalmers TimeEdit cloud base paths */
 const ORIGIN = "https://cloud.timeedit.net";
 const WEB_BASE = `${ORIGIN}/chalmers/web`;
@@ -110,18 +112,22 @@ export async function fetchGroupRooms(sessionCookie: string) {
 }
 
 /**
- * Weekly room grid from `ri.html` with a single `objects` id (see HAR `data-linkToPage`;
- * using one room ensures all `bookingDiv` titles refer to that room only).
+ * Weekly room grid from `ri.html`. Multiple rooms: comma-separated `objects`, e.g. `501.4,502.4`
+ * (same as TimeEdit `data-linkToPage` in HAR).
  */
-export async function fetchRoomWeekGridHtml(
+export async function fetchRoomsWeekGridHtml(
   sessionCookie: string,
-  roomId: string,
+  roomIds: string[],
   weekOffset = 0
 ): Promise<string> {
+  if (roomIds.length === 0) {
+    throw new Error("fetchRoomsWeekGridHtml: roomIds must be non-empty");
+  }
+  const objects = roomIds.map((id) => `${id}.4`).join(",");
   const params = new URLSearchParams({
     h: "t",
     sid: "4",
-    objects: `${roomId}.4`,
+    objects,
     ox: "0",
     types: "0",
     fe: "0",
@@ -150,6 +156,14 @@ export async function fetchRoomWeekGridHtml(
     throw new Error(`TimeEdit ri.html (schedule) failed: ${res.status} ${(await res.text()).slice(0, 400)}`);
   }
   return res.text();
+}
+
+export async function fetchRoomWeekGridHtml(
+  sessionCookie: string,
+  roomId: string,
+  weekOffset = 0
+): Promise<string> {
+  return fetchRoomsWeekGridHtml(sessionCookie, [roomId], weekOffset);
 }
 
 export async function fetchCsrfToken(sessionCookie: string): Promise<string> {
@@ -245,30 +259,54 @@ export async function submitBooking(
   return id;
 }
 
+/**
+ * Loads the same booking table fragment the UI fetches after `loadMyRes()`:
+ * full `my.html` bootstrap (for `data-sid`), then XHR with `p=0.d,6.months` (not `0.d,20.d`).
+ */
 export async function fetchMyBookingsHtml(sessionCookie: string): Promise<string> {
+  const bootstrapRes = await fetch(`${STUDENT}/my.html`, {
+    headers: {
+      Accept: "text/html",
+      Cookie: sessionCookie,
+      Referer: RESERVE_PAGE,
+      "User-Agent": timeEditUserAgent(),
+    },
+  });
+
+  if (!bootstrapRes.ok) {
+    throw new Error(`TimeEdit my.html bootstrap failed: ${bootstrapRes.status}`);
+  }
+
+  const bootstrapHtml = await bootstrapRes.text();
+  const listSid = parseLinksDataSidFromMyBookingsBootstrap(bootstrapHtml);
+
   const params = new URLSearchParams({
     so: "5",
-    p: "0.d,20.d",
+    p: "0.d,6.months",
     max: "50",
     part: "t",
     step: "3",
     g: "f",
     ph: "f",
-    sid: "4",
   });
+  // `loadMyRes` uses `Qt.join('&sid', data-sid)`; `0` means “unset” in the UI. HAR shows the
+  // student group-room list still requests `sid=4`; omitting `sid` returns an empty stub (~399 B).
+  const sidForList = listSid && listSid !== "0" ? listSid : "4";
+  params.set("sid", sidForList);
+
   const url = `${STUDENT}/my.html?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
       Accept: "text/html, */*; q=0.01",
       Cookie: sessionCookie,
-      Referer: RESERVE_PAGE,
+      Referer: `${STUDENT}/my.html`,
       "X-Requested-With": "XMLHttpRequest",
       "User-Agent": timeEditUserAgent(),
     },
   });
 
   if (!res.ok) {
-    throw new Error(`TimeEdit my.html failed: ${res.status}`);
+    throw new Error(`TimeEdit my.html list fragment failed: ${res.status}`);
   }
   return res.text();
 }
