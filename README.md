@@ -1,8 +1,10 @@
 # TimeEdit API wrapper
 
-A small stateless HTTP service for Chalmers student-facing **TimeEdit Cloud** (`cloud.timeedit.net`). The API is reverse engineered from how the web UI talks to TimeEdit: it calls TimeEdit’s own endpoints and parses the same HTML/JSON where needed, then exposes a simpler JSON API for consumers (rooms, weekly busy grids, and your own reservations).
+A small stateless HTTP service for Chalmers student-facing **TimeEdit Cloud** (`cloud.timeedit.net`). The API mirrors how the web UI talks to TimeEdit: it calls the same endpoints and parses the same HTML/JSON where needed, then exposes a simpler JSON API for consumers (rooms, weekly busy grids, and your own reservations).
 
 Nothing is stored on disk; each request uses the TimeEdit JWT you send, which the server exchanges for a short-lived session cookie the same way the browser does.
+
+*Disclaimer:* **Unofficial**—not affiliated with TimeEdit or Chalmers. **Use at your own risk;** the maintainers are not responsible for how you use this software or for any consequences (compliance, account issues, outages, data loss, etc.).
 
 ## How to use
 
