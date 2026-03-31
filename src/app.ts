@@ -139,17 +139,8 @@ app.get("/", (c) => {
   const origin = new URL(c.req.url).origin;
   return c.json({
     service: "timeedit-api-wrapper",
-    swagger: `${origin}/swagger`,
-    openApiJson: `${origin}/openapi`,
-    note: "API documentation lives in Swagger; `POST /api/auth/login` returns a JWT for `Authorization: Bearer` on protected routes.",
-    endpoints: [
-      "POST /api/auth/login  – stateless SSO login, returns JWT (see Swagger)",
-      "GET  /api/rooms",
-      "GET  /api/bookings",
-      "GET  /api/my/bookings",
-      "POST /api/my/bookings",
-      "DELETE /api/my/bookings/{id}",
-    ],
+    docs: `${origin}/swagger`,
+    openapi: `${origin}/openapi`,
   });
 });
 
