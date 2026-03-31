@@ -1,13 +1,23 @@
 import type { Context } from "hono";
 import type { AuthVars } from "../middleware/auth.js";
 import type { ReservationSlot, Room } from "../entities.js";
-import { parseRoomWeekScheduleHtml } from "../parsers/schedule.js";
+import { parseCombinedRoomsWeekScheduleHtml } from "../parsers/schedule.js";
 import type { AllRoomsBookingsResponse } from "../schemas.js";
 import { formatLocalInterval, naiveMinuteFromParser } from "../timeedit-time.js";
-import { fetchGroupRooms, fetchRoomWeekGridHtml } from "../timeedit.js";
+import { fetchGroupRooms, fetchRoomsWeekGridHtml } from "../timeedit.js";
 import { mapGroupRoomObjects } from "./rooms.js";
 
-const SCHEDULE_FETCH_CONCURRENCY = 5;
+/** Rooms per `ri.html` request (comma-separated `objects=`); keeps URLs well under limits. */
+const SCHEDULE_ROOM_BATCH_SIZE = 40;
+const SCHEDULE_FETCH_CONCURRENCY = 4;
+
+function chunkRooms<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
 
 async function mapPool<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
@@ -70,38 +80,47 @@ export async function allRoomBookingsHandler(
       rooms = rooms.filter((r) => r.name.toLowerCase().includes(needle));
     }
 
-    type FetchOutcome =
-      | { ok: true; room: Room; bookings: ReservationSlot[]; bookingRules: string }
-      | { ok: false; roomId: string; detail: string };
+    type BatchOutcome =
+      | { ok: true; batch: Room[]; parsed: ReturnType<typeof parseCombinedRoomsWeekScheduleHtml> }
+      | { ok: false; batch: Room[]; detail: string };
 
-    const outcomes = await mapPool(rooms, SCHEDULE_FETCH_CONCURRENCY, async (room) => {
+    const batches = chunkRooms(rooms, SCHEDULE_ROOM_BATCH_SIZE);
+    const outcomes = await mapPool(batches, SCHEDULE_FETCH_CONCURRENCY, async (batch) => {
       try {
-        const html = await fetchRoomWeekGridHtml(sessionCookie, room.id, weekOffset);
-        const parsed = parseRoomWeekScheduleHtml(html);
-        const bookings = parsed.bookings.map(slotToReservationSlot);
-        return {
-          ok: true,
-          room,
-          bookings,
-          bookingRules: parsed.bookingRules,
-        } satisfies FetchOutcome;
+        const html = await fetchRoomsWeekGridHtml(sessionCookie, batch.map((r) => r.id), weekOffset);
+        const parsed = parseCombinedRoomsWeekScheduleHtml(html);
+        return { ok: true, batch, parsed } satisfies BatchOutcome;
       } catch (e) {
         const detail = e instanceof Error ? e.message : String(e);
-        return { ok: false, roomId: room.id, detail } satisfies FetchOutcome;
+        return { ok: false, batch, detail } satisfies BatchOutcome;
       }
     });
 
     let bookingRules = "";
-    const roomsOut: Array<Room & { bookings: ReservationSlot[] }> = [];
     const errors: Array<{ roomId: string; detail: string }> = [];
+    const bookingsByRoomId = new Map<string, ReservationSlot[]>();
 
     for (const o of outcomes) {
-      if (o.ok) {
-        if (!bookingRules) bookingRules = o.bookingRules;
-        roomsOut.push({ ...o.room, bookings: o.bookings });
-      } else {
-        errors.push({ roomId: o.roomId, detail: o.detail });
+      if (!o.ok) {
+        for (const r of o.batch) {
+          errors.push({ roomId: r.id, detail: o.detail });
+        }
+        continue;
       }
+      if (!bookingRules) bookingRules = o.parsed.bookingRules;
+      for (const { roomId, bookings } of o.parsed.rooms) {
+        bookingsByRoomId.set(roomId, bookings.map(slotToReservationSlot));
+      }
+    }
+
+    const failedRoomIds = new Set(errors.map((e) => e.roomId));
+    const roomsOut: Array<Room & { bookings: ReservationSlot[] }> = [];
+    for (const room of rooms) {
+      if (failedRoomIds.has(room.id)) continue;
+      roomsOut.push({
+        ...room,
+        bookings: bookingsByRoomId.get(room.id) ?? [],
+      });
     }
 
     if (!bookingRules && roomsOut.length === 0 && errors.length === rooms.length && rooms.length > 0) {

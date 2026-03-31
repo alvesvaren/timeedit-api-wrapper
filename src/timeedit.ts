@@ -112,18 +112,22 @@ export async function fetchGroupRooms(sessionCookie: string) {
 }
 
 /**
- * Weekly room grid from `ri.html` with a single `objects` id (see HAR `data-linkToPage`;
- * using one room ensures all `bookingDiv` titles refer to that room only).
+ * Weekly room grid from `ri.html`. Multiple rooms: comma-separated `objects`, e.g. `501.4,502.4`
+ * (same as TimeEdit `data-linkToPage` in HAR).
  */
-export async function fetchRoomWeekGridHtml(
+export async function fetchRoomsWeekGridHtml(
   sessionCookie: string,
-  roomId: string,
+  roomIds: string[],
   weekOffset = 0
 ): Promise<string> {
+  if (roomIds.length === 0) {
+    throw new Error("fetchRoomsWeekGridHtml: roomIds must be non-empty");
+  }
+  const objects = roomIds.map((id) => `${id}.4`).join(",");
   const params = new URLSearchParams({
     h: "t",
     sid: "4",
-    objects: `${roomId}.4`,
+    objects,
     ox: "0",
     types: "0",
     fe: "0",
@@ -152,6 +156,14 @@ export async function fetchRoomWeekGridHtml(
     throw new Error(`TimeEdit ri.html (schedule) failed: ${res.status} ${(await res.text()).slice(0, 400)}`);
   }
   return res.text();
+}
+
+export async function fetchRoomWeekGridHtml(
+  sessionCookie: string,
+  roomId: string,
+  weekOffset = 0
+): Promise<string> {
+  return fetchRoomsWeekGridHtml(sessionCookie, [roomId], weekOffset);
 }
 
 export async function fetchCsrfToken(sessionCookie: string): Promise<string> {

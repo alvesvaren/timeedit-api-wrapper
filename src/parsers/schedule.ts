@@ -1,11 +1,19 @@
-import { parse } from "node-html-parser";
+import { parse, type HTMLElement } from "node-html-parser";
 import type { RoomCalendarSlot } from "../entities.js";
+import { parseTimeEditObjectsId } from "../parsers.js";
 
 /** Full parse result; `gridDates` is for server-side logic only (empty days have no bookings). */
 export type ParsedRoomViewSchedule = {
   bookingRules: string;
   bookings: RoomCalendarSlot[];
   gridDates: string[];
+};
+
+/** One combined `ri.html` response listing multiple rooms (comma-separated `objects`). */
+export type ParsedCombinedRoomWeekSchedule = {
+  bookingRules: string;
+  gridDates: string[];
+  rooms: Array<{ roomId: string; bookings: RoomCalendarSlot[] }>;
 };
 
 function normalizeTime(t: string): string {
@@ -55,10 +63,35 @@ export function parseLocalScheduleIso(iso: string): { date: string; time: string
   return { date: m[1]!, time: normalizeTime(m[2]!) };
 }
 
-/**
- * Parse the week grid HTML returned by `ri.html` (single room in `objects`).
- */
-export function parseRoomWeekScheduleHtml(html: string): ParsedRoomViewSchedule {
+function resolveRowRoomIds(weekDiv: HTMLElement): string[] {
+  const hourLine = weekDiv.querySelector(".weekHourLine");
+  if (hourLine) {
+    const ids: string[] = [];
+    for (const el of hourLine.querySelectorAll(".hour[data-object]")) {
+      const id = parseTimeEditObjectsId(el.getAttribute("data-object"));
+      if (id) ids.push(id);
+    }
+    if (ids.length > 0) return ids;
+  }
+  const one = parseTimeEditObjectsId(weekDiv.getAttribute("data-object"));
+  return one ? [one] : [];
+}
+
+function parseWeekDivStyleHeightPx(style: string | undefined): number | null {
+  const m = style?.match(/\bheight:\s*(\d+)px/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseBookingDivTopPx(style: string | undefined): number {
+  const m = style?.match(/\btop:\s*(\d+)px/i);
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function parseCombinedRoomsWeekScheduleHtml(html: string): ParsedCombinedRoomWeekSchedule {
   const root = parse(html, { blockTextElements: { script: true, style: true } });
 
   const rulesEl = root.querySelector("div.textHTML");
@@ -69,32 +102,77 @@ export function parseRoomWeekScheduleHtml(html: string): ParsedRoomViewSchedule 
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  const gridDates: string[] = [];
-  const bookings: RoomCalendarSlot[] = [];
+  const gridDatesSet = new Set<string>();
+  const bookingsByRoom = new Map<string, RoomCalendarSlot[]>();
 
   for (const wd of root.querySelectorAll("div.weekDay[data-day]")) {
     const compact = wd.getAttribute("data-day") ?? "";
     const date = compactDayToIso(compact);
     if (!date) continue;
-    gridDates.push(date);
+    gridDatesSet.add(date);
 
-    for (const node of wd.querySelectorAll("div.bookingDiv[title]")) {
+    const weekDiv =
+      wd.querySelector("div.weekDiv[data-hourHeight]") ?? wd.querySelector("div.weekDiv[data-object]");
+    if (!weekDiv) continue;
+
+    const rowRoomIds = resolveRowRoomIds(weekDiv);
+    if (rowRoomIds.length === 0) continue;
+
+    const totalH =
+      parseWeekDivStyleHeightPx(weekDiv.getAttribute("style")) ?? 40 * rowRoomIds.length;
+    const rowHeight = totalH / rowRoomIds.length;
+
+    for (const id of rowRoomIds) {
+      if (!bookingsByRoom.has(id)) bookingsByRoom.set(id, []);
+    }
+
+    for (const node of weekDiv.querySelectorAll("div.bookingDiv[title]")) {
       const title = node.getAttribute("title") ?? "";
-      const parsed = parseBookingDivTitle(title);
-      if (!parsed || parsed.date !== date) continue;
-      bookings.push({
-        start: toLocalIso(parsed.date, parsed.startTime),
-        end: toLocalIso(parsed.date, parsed.endTime),
-        reservationId: parsed.reservationId,
-        label: parsed.label,
+      const parsedTitle = parseBookingDivTitle(title);
+      if (!parsedTitle || parsedTitle.date !== date) continue;
+      const top = parseBookingDivTopPx(node.getAttribute("style"));
+      const row = Math.min(
+        Math.max(0, Math.floor(top / rowHeight)),
+        rowRoomIds.length - 1
+      );
+      const roomId = rowRoomIds[row]!;
+      bookingsByRoom.get(roomId)!.push({
+        start: toLocalIso(parsedTitle.date, parsedTitle.startTime),
+        end: toLocalIso(parsedTitle.date, parsedTitle.endTime),
+        reservationId: parsedTitle.reservationId,
+        label: parsedTitle.label,
       });
     }
   }
 
-  gridDates.sort((a, b) => a.localeCompare(b));
-  bookings.sort((a, b) => a.start.localeCompare(b.start));
+  const gridDates = [...gridDatesSet].sort((a, b) => a.localeCompare(b));
+  const rooms = [...bookingsByRoom.entries()]
+    .map(([roomId, bookings]) => ({
+      roomId,
+      bookings: bookings.sort((a, b) => a.start.localeCompare(b.start)),
+    }))
+    .sort((a, b) => a.roomId.localeCompare(b.roomId, undefined, { numeric: true }));
 
-  return { bookingRules, bookings, gridDates };
+  return { bookingRules, gridDates, rooms };
+}
+
+/**
+ * Parse the week grid HTML returned by `ri.html` for a **single** room (`objects` is one id).
+ */
+export function parseRoomWeekScheduleHtml(html: string): ParsedRoomViewSchedule {
+  const c = parseCombinedRoomsWeekScheduleHtml(html);
+  if (c.rooms.length === 0) {
+    return { bookingRules: c.bookingRules, bookings: [], gridDates: c.gridDates };
+  }
+  if (c.rooms.length > 1) {
+    throw new Error(`parseRoomWeekScheduleHtml: expected one room in HTML, got ${c.rooms.length}`);
+  }
+  const single = c.rooms[0]!;
+  return {
+    bookingRules: c.bookingRules,
+    bookings: single.bookings,
+    gridDates: c.gridDates,
+  };
 }
 
 export function timeToMinutes(hhmm: string): number {
