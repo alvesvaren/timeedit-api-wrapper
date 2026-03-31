@@ -1,14 +1,14 @@
 /**
- * Domain entity types (`Room`, `Booking`, …) live in {@link ./entities.js}.
- * Route/body schemas compose those entities in {@link ./schemas.js}.
+ * Shared exports for application code; entities live in {@link ./entities.js}.
  */
 export type {
-  Booking,
   BookingInterval,
   CreatedBooking,
+  MyBooking,
+  ReservationSlot,
   Room,
+  RoomAttributes,
   RoomCalendarSlot,
-  RoomRef,
 } from "./entities.js";
 export type { CreateBookingInput } from "./schemas.js";
 export { createBookingSchema } from "./schemas.js";

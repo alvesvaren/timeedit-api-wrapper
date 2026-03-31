@@ -4,28 +4,32 @@
 import { z } from "@hono/zod-openapi";
 import {
   ReservationCreatedSchema,
-  RoomCalendarSlotSchema,
+  ReservationSlotSchema,
+  RoomAttributesSchema,
   RoomSchema,
 } from "./entities.js";
 
 export {
   BookingIntervalSchema,
-  BookingSchema,
   CreatedBookingSchema,
+  MyBookingSchema,
   NaiveLocalDateTimeSchema,
+  NaiveMinuteDateTimeSchema,
   ReservationCreatedSchema,
+  ReservationSlotSchema,
+  RoomAttributesSchema,
   RoomCalendarSlotSchema,
-  RoomRefSchema,
   RoomSchema,
 } from "./entities.js";
 
 export type {
-  Booking,
   BookingInterval,
   CreatedBooking,
+  MyBooking,
+  ReservationSlot,
   Room,
+  RoomAttributes,
   RoomCalendarSlot,
-  RoomRef,
 } from "./entities.js";
 
 export const reservationCreatedSchema = ReservationCreatedSchema;
@@ -33,18 +37,14 @@ export const reservationCreatedSchema = ReservationCreatedSchema;
 export const createBookingSchema = z
   .object({
     roomId: z.string().min(1).openapi({ example: "485" }),
-    date: z
+    interval: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .openapi({ example: "2026-03-28" }),
-    startTime: z
-      .string()
-      .regex(/^\d{1,2}:\d{2}$/)
-      .openapi({ example: "11:15" }),
-    endTime: z
-      .string()
-      .regex(/^\d{1,2}:\d{2}$/)
-      .openapi({ example: "12:15" }),
+      .min(1)
+      .openapi({
+        example: "2026-03-28T18:00/19:00",
+        description:
+          "ISO-style interval in Europe/Stockholm: `YYYY-MM-DDTHH:mm/end` where `end` is `HH:mm`, full `YYYY-MM-DDTHH:mm`, or `PT…` duration (e.g. `PT1H`). Must align to 15-minute grid; must not cross local midnight.",
+      }),
     title: z.string().optional().openapi({ example: "Study session" }),
     comment: z.string().optional().openapi({ example: "" }),
   })
@@ -126,10 +126,6 @@ export const BookingIdParamsSchema = z.object({
     }),
 });
 
-export const RoomWithBookingsSchema = RoomSchema.extend({
-  bookings: z.array(RoomCalendarSlotSchema),
-}).openapi("RoomWithBookings");
-
 export const RoomBookingsFetchErrorSchema = z
   .object({
     roomId: z.string(),
@@ -137,22 +133,31 @@ export const RoomBookingsFetchErrorSchema = z
   })
   .openapi("RoomBookingsFetchError");
 
+export const RoomsListSchema = z.array(RoomSchema).openapi("RoomsList", {
+  description: "Bookable group rooms; each entry includes `id`, `name`, capacity, equipment, and campus.",
+});
+
+export const RoomWithReservationsSchema = RoomSchema.extend({
+  bookings: z.array(ReservationSlotSchema),
+}).openapi("RoomWithReservations", {
+  description: "One room's metadata plus that room's busy slots for the requested week.",
+});
+
 export const AllRoomsBookingsSchema = z
   .object({
-    weekOffset: z.number().openapi({ example: 0 }),
     bookingRules: z.string(),
-    rooms: z.array(RoomWithBookingsSchema),
+    rooms: z.array(RoomWithReservationsSchema),
     errors: z
       .array(RoomBookingsFetchErrorSchema)
       .optional()
       .openapi({
         description:
-          "Per-room upstream/parse failures (other rooms in `rooms` are still returned).",
+          "Per-room upstream/parse failures (other entries in `rooms` may still be present).",
       }),
   })
   .openapi("AllRoomsBookings", {
     description:
-      "Aggregate week grid. `rooms[]` items are `RoomWithBookings` (`Room` + `RoomCalendarSlot[]`); see components/schemas.",
+      "Week grid: shared booking rules and a `rooms` array (each room self-described with `bookings`). No `weekOffset` in body (query only).",
   });
 
 export type AllRoomsBookingsResponse = z.infer<typeof AllRoomsBookingsSchema>;

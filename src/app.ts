@@ -103,9 +103,9 @@ app.doc31("/openapi", {
   openapi: "3.1.0",
   info: {
     title: "TimeEdit API Wrapper",
-    version: "1.0.0",
+    version: "2.0.0",
     description:
-      "Stateless Chalmers group-room wrapper over TimeEdit. Obtain a token with `POST /api/auth/login`, then send `Authorization: Bearer <token>` on protected routes.",
+      "Stateless Chalmers group-room wrapper over TimeEdit. Obtain a token with `POST /api/auth/login`, then send `Authorization: Bearer <token>` on protected routes. **Breaking (2.0):** naive minute ISO (`YYYY-MM-DDTHH:mm`), interval strings in responses; create uses `interval` instead of separate date/times. All wall times are nominal **Europe/Stockholm**.",
   },
   tags: [
     {
@@ -115,7 +115,7 @@ app.doc31("/openapi", {
     },
     {
       name: "Rooms",
-      description: "List rooms and week booking grids (busy intervals per room)",
+      description: "Room catalog and week grids: self-described room objects with embedded busy slots",
     },
     {
       name: "My bookings",

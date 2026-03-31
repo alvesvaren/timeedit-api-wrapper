@@ -66,7 +66,6 @@ function isSlotStartInFuture(ymd: string, startHm: string, now: Date): boolean {
 
 /**
  * Next Saturday in Stockholm where 18:00–19:00 is still in the future.
- * Saturday evening is usually free in the UI grid but remains bookable via the API.
  */
 function defaultSaturdayEveningSlot(): { date: string; startTime: string; endTime: string } {
   const startTime = "18:00";
@@ -95,32 +94,40 @@ const bookingDate = slot.date;
 const bookingStartTime = slot.startTime;
 const bookingEndTime = slot.endTime;
 
+/** API `interval` for POST /api/my/bookings (minute ISO). */
+function bookingInterval(): string {
+  const [shRaw, smRaw] = bookingStartTime.split(":");
+  const [ehRaw, emRaw] = bookingEndTime.split(":");
+  const sh = `${shRaw!.padStart(2, "0")}:${smRaw}`;
+  const eh = `${ehRaw!.padStart(2, "0")}:${emRaw}`;
+  return `${bookingDate}T${sh}/${eh}`;
+}
+
 describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
   const authHeader = { Authorization: `Bearer ${token}` };
 
-  test("GET /api/bookings returns all room week grids", async () => {
+  test("GET /api/bookings returns self-described rooms with bookings", async () => {
     const roomsRes = await app.request("/api/rooms", { headers: authHeader });
     expect(roomsRes.status).toBe(200);
-    const listed = (await roomsRes.json()) as Array<{ id: string }>;
+    const roomList = (await roomsRes.json()) as Array<{ id: string; name: string }>;
+    expect(Array.isArray(roomList)).toBe(true);
+    const listedIds = roomList.map((r) => r.id);
+    expect(listedIds.length).toBeGreaterThan(0);
 
     const res = await app.request("/api/bookings", { headers: authHeader });
     expect(res.status).toBe(200);
     const data = (await res.json()) as {
-      weekOffset: number;
       bookingRules: string;
-      rooms: Array<{ id: string; name: string; bookings: unknown[] }>;
+      rooms: Array<{ id: string; bookings: Array<{ interval: string }> }>;
       errors?: unknown[];
     };
-    expect(data.weekOffset).toBe(0);
     expect(data.bookingRules.length).toBeGreaterThan(20);
-    expect(data.rooms).toHaveLength(listed.length);
-    for (const r of data.rooms) {
-      expect(r.id).toBeTruthy();
-      expect(r.name).toBeTruthy();
-      expect(Array.isArray(r.bookings)).toBe(true);
-      for (const b of r.bookings as Array<{ start: string; end: string }>) {
-        expect(b.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
-        expect(b.end).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+    expect(data.rooms.length).toBe(listedIds.length);
+    for (const id of listedIds) {
+      const row = data.rooms.find((r) => r.id === id);
+      expect(row).toBeDefined();
+      for (const b of row!.bookings) {
+        expect(b.interval).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\//);
       }
     }
     if (data.errors?.length) {
@@ -135,18 +142,17 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
     );
     expect(res.status).toBe(200);
     const data = (await res.json()) as { rooms: Array<{ id: string }> };
-    expect(data.rooms).toHaveLength(1);
-    expect(data.rooms[0]!.id).toBe(testRoomId);
+    expect(data.rooms.map((r) => r.id)).toEqual([testRoomId]);
   });
 
-  test("GET /api/rooms returns rooms", async () => {
+  test("GET /api/rooms returns array with id on each room", async () => {
     const res = await app.request("/api/rooms", { headers: authHeader });
     expect(res.status).toBe(200);
     const rooms = (await res.json()) as Array<Record<string, unknown>>;
     expect(Array.isArray(rooms)).toBe(true);
     expect(rooms.length).toBeGreaterThan(0);
     const first = rooms[0]!;
-    expect(first).toHaveProperty("id");
+    expect(first.id).toMatch(/^\d+$/);
     expect(first).toHaveProperty("name");
     expect(first).toHaveProperty("campus");
   });
@@ -159,9 +165,7 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
       headers: { ...authHeader, "Content-Type": "application/json" },
       body: JSON.stringify({
         roomId: testRoomId,
-        date: bookingDate,
-        startTime: bookingStartTime,
-        endTime: bookingEndTime,
+        interval: bookingInterval(),
         title: "e2e-api-wrapper",
         comment: "automated test",
       }),
@@ -180,15 +184,13 @@ describe.skipIf(!token).sequential("e2e TimeEdit lifecycle", () => {
     expect(res.status).toBe(200);
     const list = (await res.json()) as Array<{
       id: string;
-      start: string;
-      end: string;
-      room: { name: string };
+      interval: string;
+      roomId: string;
     }>;
     const row = list.find((b) => b.id === reservationId);
     expect(row).toBeDefined();
-    expect(row!.start).toBe(`${bookingDate}T${bookingStartTime}:00`);
-    expect(row!.end).toBe(`${bookingDate}T${bookingEndTime}:00`);
-    expect(row!.room.name.length).toBeGreaterThan(0);
+    expect(row!.roomId).toBe(testRoomId);
+    expect(row!.interval).toBe(bookingInterval());
   });
 
   test("DELETE /api/my/bookings/:id cancels", async () => {

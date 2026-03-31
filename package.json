@@ -16,10 +16,12 @@
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.2.3",
     "hono": "^4.6.14",
+    "luxon": "^3.7.2",
     "node-html-parser": "^6.1.13",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/luxon": "^3.7.1",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

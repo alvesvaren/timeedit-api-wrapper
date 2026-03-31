@@ -3,8 +3,8 @@ import {
   AllBookingsQuerySchema,
   AllRoomsBookingsSchema,
   BookingIdParamsSchema,
-  BookingSchema,
-  RoomSchema,
+  MyBookingSchema,
+  RoomsListSchema,
   cancelSuccessSchema,
   createBookingSchema,
   gatewayErrorSchema,
@@ -62,11 +62,11 @@ export const listRoomsRoute = createRoute({
   tags: ["Rooms"],
   summary: "List group rooms",
   description:
-    "Returns bookable group rooms (Grupprum) for Chalmers TimeEdit. Requires a valid TimeEdit JWT.",
+    "Returns bookable group rooms (Grupprum) for Chalmers TimeEdit as a JSON array; each object includes `id`, `name`, capacity, equipment, and campus. Requires a valid TimeEdit JWT. All datetimes elsewhere in this API use nominal Europe/Stockholm wall time.",
   responses: {
     200: {
       description: "Rooms available for student booking",
-      content: { "application/json": { schema: z.array(RoomSchema) } },
+      content: { "application/json": { schema: RoomsListSchema } },
     },
     401: {
       description: "Missing or invalid Authorization header",
@@ -86,13 +86,13 @@ export const allRoomBookingsRoute = createRoute({
   tags: ["Rooms"],
   summary: "Week booking grids for all rooms",
   description:
-    "Loads the same group-room list as GET /api/rooms, applies optional filters (campus, name substring, explicit ids), then returns flat `bookings` (ISO local start/end per busy slot) for every matching room. Each room uses its own TimeEdit `ri.html` request. Fetches run concurrently in small batches server-side.",
+    "Loads the same group-room list as GET /api/rooms, applies optional filters, then returns a `rooms` array: each entry is a full room plus `bookings` (`interval`, optional `id`, optional `label`). `weekOffset` is query-only (not repeated in the body).",
   request: {
     query: AllBookingsQuerySchema,
   },
   responses: {
     200: {
-      description: "Booking rules (shared) plus busy intervals per room; optional per-room errors",
+      description: "Booking rules (shared) plus `rooms` with per-room bookings; optional per-room errors",
       content: { "application/json": { schema: AllRoomsBookingsSchema } },
     },
     401: {
@@ -115,7 +115,7 @@ export const listMyBookingsRoute = createRoute({
   responses: {
     200: {
       description: "Current reservations for the authenticated user",
-      content: { "application/json": { schema: z.array(BookingSchema) } },
+      content: { "application/json": { schema: z.array(MyBookingSchema) } },
     },
     401: {
       description: "Missing or invalid Authorization header",

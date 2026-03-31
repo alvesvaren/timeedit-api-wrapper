@@ -1,3 +1,5 @@
+import { parseLinksDataSidFromMyBookingsBootstrap } from "./parsers.js";
+
 /** Chalmers TimeEdit cloud base paths */
 const ORIGIN = "https://cloud.timeedit.net";
 const WEB_BASE = `${ORIGIN}/chalmers/web`;
@@ -245,30 +247,54 @@ export async function submitBooking(
   return id;
 }
 
+/**
+ * Loads the same booking table fragment the UI fetches after `loadMyRes()`:
+ * full `my.html` bootstrap (for `data-sid`), then XHR with `p=0.d,6.months` (not `0.d,20.d`).
+ */
 export async function fetchMyBookingsHtml(sessionCookie: string): Promise<string> {
+  const bootstrapRes = await fetch(`${STUDENT}/my.html`, {
+    headers: {
+      Accept: "text/html",
+      Cookie: sessionCookie,
+      Referer: RESERVE_PAGE,
+      "User-Agent": timeEditUserAgent(),
+    },
+  });
+
+  if (!bootstrapRes.ok) {
+    throw new Error(`TimeEdit my.html bootstrap failed: ${bootstrapRes.status}`);
+  }
+
+  const bootstrapHtml = await bootstrapRes.text();
+  const listSid = parseLinksDataSidFromMyBookingsBootstrap(bootstrapHtml);
+
   const params = new URLSearchParams({
     so: "5",
-    p: "0.d,20.d",
+    p: "0.d,6.months",
     max: "50",
     part: "t",
     step: "3",
     g: "f",
     ph: "f",
-    sid: "4",
   });
+  // `loadMyRes` uses `Qt.join('&sid', data-sid)`; `0` means “unset” in the UI. HAR shows the
+  // student group-room list still requests `sid=4`; omitting `sid` returns an empty stub (~399 B).
+  const sidForList = listSid && listSid !== "0" ? listSid : "4";
+  params.set("sid", sidForList);
+
   const url = `${STUDENT}/my.html?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
       Accept: "text/html, */*; q=0.01",
       Cookie: sessionCookie,
-      Referer: RESERVE_PAGE,
+      Referer: `${STUDENT}/my.html`,
       "X-Requested-With": "XMLHttpRequest",
       "User-Agent": timeEditUserAgent(),
     },
   });
 
   if (!res.ok) {
-    throw new Error(`TimeEdit my.html failed: ${res.status}`);
+    throw new Error(`TimeEdit my.html list fragment failed: ${res.status}`);
   }
   return res.text();
 }

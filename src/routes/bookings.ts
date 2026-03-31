@@ -1,22 +1,88 @@
 import type { Context } from "hono";
 import type { AuthVars } from "../middleware/auth.js";
+import type { MyBooking } from "../entities.js";
 import { parseMyBookingsHtml } from "../parsers.js";
 import {
   cancelBooking,
   dateToCompact,
   fetchCsrfToken,
+  fetchGroupRooms,
   fetchMyBookingsHtml,
   submitBooking,
 } from "../timeedit.js";
-import type { CreateBookingInput } from "../schemas.js";
+import type { CreateBookingInput, Room } from "../schemas.js";
 import { createBookingSchema } from "../schemas.js";
+import {
+  formatLocalInterval,
+  naiveMinuteFromParser,
+  normalizeCreatedAtMinute,
+  parseIntervalForCreate,
+} from "../timeedit-time.js";
+import { mapGroupRoomObjects } from "./rooms.js";
+
+function buildRoomNameToId(rooms: Room[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const r of rooms) {
+    const name = r.name.trim();
+    const full = name.toLowerCase();
+    if (!m.has(full)) m.set(full, r.id);
+    const beforeComma = name.split(",")[0]!.trim().toLowerCase();
+    if (beforeComma && beforeComma !== full && !m.has(beforeComma)) {
+      m.set(beforeComma, r.id);
+    }
+  }
+  return m;
+}
+
+function resolveRoomIdFromCatalog(
+  roomName: string,
+  nameToId: Map<string, string>
+): string | undefined {
+  const full = roomName.trim().toLowerCase();
+  const short = roomName.split(",")[0]!.trim().toLowerCase();
+  return nameToId.get(full) ?? nameToId.get(short);
+}
 
 export async function listBookingsHandler(c: Context<{ Variables: AuthVars }>) {
   const sessionCookie = c.get("sessionCookie");
   try {
-    const html = await fetchMyBookingsHtml(sessionCookie);
-    const bookings = parseMyBookingsHtml(html);
-    return c.json(bookings, 200);
+    const [html, rawRooms] = await Promise.all([
+      fetchMyBookingsHtml(sessionCookie),
+      fetchGroupRooms(sessionCookie),
+    ]);
+    const rows = parseMyBookingsHtml(html);
+    const nameToId = buildRoomNameToId(mapGroupRoomObjects(rawRooms));
+
+    const list: MyBooking[] = [];
+    for (const row of rows) {
+      const roomId = row.roomId ?? resolveRoomIdFromCatalog(row.roomName, nameToId);
+      if (!roomId) {
+        throw new Error(
+          `Could not resolve room id for my-bookings row (reservation ${row.id}, room "${row.roomName}")`
+        );
+      }
+      const startM = naiveMinuteFromParser(row.start);
+      const endM = naiveMinuteFromParser(row.end);
+      const interval = formatLocalInterval(startM, endM);
+      let createdAt: string;
+      try {
+        createdAt =
+          row.createdAtRaw.trim().length > 0
+            ? normalizeCreatedAtMinute(row.createdAtRaw)
+            : startM;
+      } catch {
+        createdAt = startM;
+      }
+      const item: MyBooking = {
+        id: row.id,
+        interval,
+        roomId,
+        createdAt,
+      };
+      list.push(item);
+    }
+
+    return c.json(list, 200);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return c.json({ error: "Failed to list bookings", detail: message }, 502);
@@ -29,13 +95,27 @@ export async function createBookingFromInput(
   input: CreateBookingInput
 ) {
   const sessionCookie = c.get("sessionCookie");
+  let times: ReturnType<typeof parseIntervalForCreate>;
+  try {
+    times = parseIntervalForCreate(input.interval);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return c.json(
+      {
+        error: "Validation failed",
+        issues: { interval: [detail] },
+      },
+      400
+    );
+  }
+
   try {
     const csrf = await fetchCsrfToken(sessionCookie);
     const reservationId = await submitBooking(sessionCookie, csrf, {
       roomId: input.roomId,
-      datesCompact: dateToCompact(input.date),
-      startTime: input.startTime,
-      endTime: input.endTime,
+      datesCompact: dateToCompact(times.date),
+      startTime: times.startTime,
+      endTime: times.endTime,
       title: input.title,
       comment: input.comment,
     });
