@@ -37,6 +37,27 @@ describe("schedule parser", () => {
     });
   });
 
+  test("parseBookingDivTitle splits a trailing TimeEdit status from the label", () => {
+    expect(
+      parseBookingDivTitle(" 2026-10-21 05:30 - 00:00 service, Bekräftad ID 293939")
+    ).toEqual({
+      date: "2026-10-21",
+      startTime: "05:30",
+      endTime: "00:00",
+      reservationId: "293939",
+      label: "service",
+      status: "Bekräftad",
+    });
+    expect(parseBookingDivTitle(" 2026-10-19 09:00 - 12:00 Bekräftad ID 307538")).toEqual({
+      date: "2026-10-19",
+      startTime: "09:00",
+      endTime: "12:00",
+      reservationId: "307538",
+      label: undefined,
+      status: "Bekräftad",
+    });
+  });
+
   test("parseLocalScheduleIso", () => {
     expect(parseLocalScheduleIso("2026-03-23T08:15:00")).toEqual({
       date: "2026-03-23",
@@ -100,7 +121,8 @@ describe("schedule parser", () => {
         start: "2026-10-21T05:30:00",
         end: "2026-10-22T00:00:00",
         reservationId: "293939",
-        label: "service, Bekräftad",
+        label: "service",
+        status: "Bekräftad",
       },
     ]);
   });

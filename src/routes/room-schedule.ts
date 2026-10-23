@@ -44,6 +44,7 @@ function slotToReservationSlot(slot: {
   end: string;
   reservationId?: string;
   label?: string;
+  status?: string;
 }): ReservationSlot {
   const startM = naiveMinuteFromParser(slot.start);
   const endM = naiveMinuteFromParser(slot.end);
@@ -51,6 +52,7 @@ function slotToReservationSlot(slot: {
   const row: ReservationSlot = { interval };
   if (slot.reservationId) row.id = slot.reservationId;
   if (slot.label) row.label = slot.label;
+  if (slot.status) row.status = slot.status;
   return row;
 }
 
