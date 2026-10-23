@@ -63,6 +63,43 @@ describe("parseMyBookingsHtml roomId from row", () => {
     expect(rows[0]!.createdAtRaw).toBe("2026-03-27 13:36");
   });
 
+  test("reads room and created columns by header when a title column precedes the room", () => {
+    const html = `<table cellspacing="0" class="restable">
+      <tr class="columnHeaders">
+        <th class="modifiedRecentlyTd"></th>
+        <th class="timepadd"><div class="chwrap" title="Tid">Tid</div></th>
+        <th><div class="chwrap" title="Rubrik">Rubrik</div></th>
+        <th><div class="chwrap" title="Lokalnamn">Lokalnamn</div></th>
+        <th class="columnLineRight"><div class="chwrap" title="Längd timmar">Längd timmar</div></th>
+        <th><div class="chwrap" title="Skapad">Skapad</div></th>
+        <th><div class="chwrap" title="Status">Status</div></th>
+      </tr>
+      <tr data-id="311794" class="rr clickable2" tabindex="0" onclick="openRes(311794, this, 'time311794','&step=3&amp;myp=t')">
+        <td class="modifiedRecentlyTd"></td>
+        <td id="time311794" class="time tt c-1" title="ID 311794">2026-10-27 &nbsp; 13:00 - 17:00</td>
+        <td class="column0 columnLine nw c-1">
+          Grupprum</td>
+        <td class="column1 columnLine nw c-1">
+          EG-3211B</td>
+        <td class="column0 columnLine nw c-1 columnLineRight">
+          4:00</td>
+        <td class="column1 columnLine nw c-1">
+          2026-10-23 11:59</td>
+        <td class="column0 columnLine nw c-1">
+          Bekräftad</td>
+      </tr>
+    </table>`;
+    expect(parseMyBookingsHtml(html)).toEqual([
+      {
+        id: "311794",
+        start: "2026-10-27T13:00:00",
+        end: "2026-10-27T17:00:00",
+        roomName: "EG-3211B",
+        createdAtRaw: "2026-10-23 11:59",
+      },
+    ]);
+  });
+
   test("extracts roomId from absolute my.html href", () => {
     const html = `<table><tbody>
       <tr class="rr" data-id="1">
