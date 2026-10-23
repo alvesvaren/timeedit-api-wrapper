@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { parse, type HTMLElement } from "node-html-parser";
 import type { RoomCalendarSlot } from "../entities.js";
 import { parseTimeEditObjectsId } from "../parsers.js";
@@ -23,6 +24,12 @@ function normalizeTime(t: string): string {
 
 function toLocalIso(date: string, hhmm: string): string {
   return `${date}T${normalizeTime(hhmm)}:00`;
+}
+
+/** TimeEdit writes a booking that runs to midnight as ending at `00:00`, so an end at or before the start belongs to the next day. */
+function endDate(date: string, startTime: string, endTime: string): string {
+  if (timeToMinutes(endTime) > timeToMinutes(startTime)) return date;
+  return DateTime.fromISO(date).plus({ days: 1 }).toISODate()!;
 }
 
 /**
@@ -138,7 +145,10 @@ export function parseCombinedRoomsWeekScheduleHtml(html: string): ParsedCombined
       const roomId = rowRoomIds[row]!;
       bookingsByRoom.get(roomId)!.push({
         start: toLocalIso(parsedTitle.date, parsedTitle.startTime),
-        end: toLocalIso(parsedTitle.date, parsedTitle.endTime),
+        end: toLocalIso(
+          endDate(parsedTitle.date, parsedTitle.startTime, parsedTitle.endTime),
+          parsedTitle.endTime
+        ),
         reservationId: parsedTitle.reservationId,
         label: parsedTitle.label,
       });

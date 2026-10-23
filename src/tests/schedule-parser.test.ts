@@ -85,6 +85,26 @@ describe("schedule parser", () => {
     expect(s.bookings.map((b) => b.reservationId)).toEqual(["9"]);
   });
 
+  test("booking ending at 00:00 ends at midnight of the next day", () => {
+    const html = `
+<div class="weekDay" data-day="20261021">
+  <div class="weekDiv" data-hourHeight="13" style="height: 40px;">
+    <div class="weekHourLine">
+      <div class="hour" data-object="485.4"></div>
+    </div>
+    <div class="bookingDiv" style="top: 0px;" title=" 2026-10-21 05:30 - 00:00 service, Bekräftad ID 293939"></div>
+  </div>
+</div>`;
+    expect(parseRoomWeekScheduleHtml(html).bookings).toEqual([
+      {
+        start: "2026-10-21T05:30:00",
+        end: "2026-10-22T00:00:00",
+        reservationId: "293939",
+        label: "service, Bekräftad",
+      },
+    ]);
+  });
+
   test("parseCombined assigns rows to room ids (two-room strip)", () => {
     const html = `
 <div class="textHTML"><br>Rules here</div>
