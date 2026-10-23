@@ -32,6 +32,9 @@ function endDate(date: string, startTime: string, endTime: string): string {
   return DateTime.fromISO(date).plus({ days: 1 }).toISODate()!;
 }
 
+/** Statuses TimeEdit appends as the last comma-separated part of a bookingDiv title. */
+const BOOKING_STATUSES = new Set(["Bekräftad"]);
+
 /**
  * Parse `title` on bookingDiv, e.g. "2026-03-23 08:00 - 10:00  ID 174803" or "... Övrigt ID 174859".
  */
@@ -41,6 +44,7 @@ export function parseBookingDivTitle(title: string): {
   endTime: string;
   reservationId?: string;
   label?: string;
+  status?: string;
 } | null {
   const t = title.trim().replace(/\s+/g, " ");
   const head = t.match(
@@ -53,9 +57,14 @@ export function parseBookingDivTitle(title: string): {
   const rest = t.slice(head[0].length).trim();
   const idMatch = rest.match(/ID\s+(\d+)\s*$/i);
   const reservationId = idMatch?.[1];
-  const labelRaw = rest.replace(/ID\s+\d+\s*$/i, "").trim();
-  const label: string | undefined = labelRaw === "" ? undefined : labelRaw;
-  return { date, startTime, endTime, reservationId, label };
+  const parts = rest
+    .replace(/ID\s+\d+\s*$/i, "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p !== "");
+  const status = BOOKING_STATUSES.has(parts.at(-1) ?? "") ? parts.pop() : undefined;
+  const label = parts.length > 0 ? parts.join(", ") : undefined;
+  return { date, startTime, endTime, reservationId, label, status };
 }
 
 function compactDayToIso(compact: string): string | null {
@@ -151,6 +160,7 @@ export function parseCombinedRoomsWeekScheduleHtml(html: string): ParsedCombined
         ),
         reservationId: parsedTitle.reservationId,
         label: parsedTitle.label,
+        status: parsedTitle.status,
       });
     }
   }

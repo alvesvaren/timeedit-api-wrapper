@@ -68,6 +68,7 @@ export const ReservationSlotSchema = z
     }),
     id: z.string().optional().openapi({ example: "174803", description: "TimeEdit reservation id when known" }),
     label: z.string().optional().openapi({ example: "Övrigt" }),
+    status: z.string().optional().openapi({ example: "Bekräftad", description: "TimeEdit booking status" }),
   })
   .openapi("ReservationSlot");
 
@@ -95,6 +96,7 @@ export type MyBooking = z.infer<typeof MyBookingSchema>;
 export const RoomCalendarSlotSchema = BookingIntervalSchema.extend({
   reservationId: z.string().optional().openapi({ example: "174803" }),
   label: z.string().optional().openapi({ example: "Övrigt" }),
+  status: z.string().optional().openapi({ example: "Bekräftad" }),
 }).openapi("RoomCalendarSlot");
 
 export type RoomCalendarSlot = z.infer<typeof RoomCalendarSlotSchema>;
