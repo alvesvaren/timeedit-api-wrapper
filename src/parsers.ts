@@ -71,9 +71,29 @@ function rowHasRrClass(tr: HTMLElement): boolean {
   return (tr.getAttribute("class") ?? "").split(/\s+/).includes("rr");
 }
 
+const ROOM_NAME_HEADER = "lokalnamn";
+const CREATED_AT_HEADER = "skapad";
+
+function cellText(td: HTMLElement): string {
+  return td.text.replace(/&nbsp;/gi, " ").replace(/\u00a0/g, " ").trim();
+}
+
+/** Column indexes from the `tr.columnHeaders` row. TimeEdit can add columns such as Rubrik before Lokalnamn. */
+function readHeaderIndexes(root: HTMLElement): { room?: number; createdAt?: number } {
+  const titles = (root.querySelector("tr.columnHeaders")?.querySelectorAll(":scope > th") ?? []).map(
+    (th) => cellText(th).toLowerCase()
+  );
+  const indexOf = (title: string) => {
+    const i = titles.indexOf(title);
+    return i === -1 ? undefined : i;
+  };
+  return { room: indexOf(ROOM_NAME_HEADER), createdAt: indexOf(CREATED_AT_HEADER) };
+}
+
 export function parseMyBookingsHtml(html: string): ParsedMyBookingRow[] {
   const root = parse(html, { blockTextElements: { script: true, style: true } });
   const bookings: ParsedMyBookingRow[] = [];
+  const header = readHeaderIndexes(root);
 
   for (const tr of root.querySelectorAll("tr[data-id]")) {
     if (!rowHasRrClass(tr)) continue;
@@ -98,9 +118,12 @@ export function parseMyBookingsHtml(html: string): ParsedMyBookingRow[] {
     const cells = tr.querySelectorAll(":scope > td");
     let roomName = "";
     let createdAtRaw = "";
-    if (cells.length >= 5) {
-      roomName = cells[2]!.text.replace(/&nbsp;/gi, " ").replace(/\u00a0/g, " ").trim();
-      createdAtRaw = cells[4]!.text.replace(/&nbsp;/gi, " ").replace(/\u00a0/g, " ").trim();
+    if (header.room !== undefined && header.createdAt !== undefined) {
+      roomName = cells[header.room] ? cellText(cells[header.room]!) : "";
+      createdAtRaw = cells[header.createdAt] ? cellText(cells[header.createdAt]!) : "";
+    } else if (cells.length >= 5) {
+      roomName = cellText(cells[2]!);
+      createdAtRaw = cellText(cells[4]!);
     } else {
       for (const td of cells) {
         const cls = td.getAttribute("class") ?? "";
