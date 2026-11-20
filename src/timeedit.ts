@@ -338,7 +338,8 @@ export async function cancelBooking(
   }
 
   const text = (await res.text()).trim();
-  if (!text.includes("Avbokning")) {
+  // A successful cancel returns the plain-text title "TimeEdit - Ny avbokning".
+  if (!text.toLowerCase().includes("avbokning")) {
     throw new Error(`TimeEdit cancel: unexpected response: ${text.slice(0, 200)}`);
   }
 }
