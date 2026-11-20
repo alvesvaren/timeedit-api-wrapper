@@ -4,13 +4,14 @@ import type { MyBooking } from "../entities.js";
 import { parseMyBookingsHtml } from "../parsers.js";
 import {
   cancelBooking,
+  changeBookingTime,
   dateToCompact,
   fetchCsrfToken,
   fetchGroupRooms,
   fetchMyBookingsHtml,
   submitBooking,
 } from "../timeedit.js";
-import type { CreateBookingInput, Room } from "../schemas.js";
+import type { ChangeBookingInput, CreateBookingInput, Room } from "../schemas.js";
 import { createBookingSchema } from "../schemas.js";
 import {
   formatLocalInterval,
@@ -175,4 +176,43 @@ export async function deleteBookingById(
 export async function deleteBookingHandler(c: Context<{ Variables: AuthVars }>) {
   const id = c.req.param("id") ?? "";
   return deleteBookingById(c, id);
+}
+
+const CHANGE_FAILURE_RESPONSE = {
+  not_found: { error: "Booking not found", status: 404 },
+  rejected: { error: "Change rejected by TimeEdit", status: 409 },
+} as const;
+
+/** Used when params and body are pre-validated by OpenAPI middleware. */
+export async function changeBookingFromInput(
+  c: Context<{ Variables: AuthVars }>,
+  reservationId: string,
+  input: ChangeBookingInput
+) {
+  const sessionCookie = c.get("sessionCookie");
+  let times: ReturnType<typeof parseIntervalForCreate>;
+  try {
+    times = parseIntervalForCreate(input.interval);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return c.json({ error: "Validation failed", issues: { interval: [detail] } }, 400);
+  }
+
+  try {
+    const csrf = await fetchCsrfToken(sessionCookie);
+    const result = await changeBookingTime(sessionCookie, csrf, {
+      reservationId,
+      datesCompact: dateToCompact(times.date),
+      startTime: times.startTime,
+      endTime: times.endTime,
+    });
+    if (!result.ok) {
+      const { error, status } = CHANGE_FAILURE_RESPONSE[result.reason];
+      return c.json({ error, detail: result.detail }, status);
+    }
+    return c.json({ booking: { id: reservationId } }, 200);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return c.json({ error: "Change failed", detail: message }, 502);
+  }
 }

@@ -1,5 +1,6 @@
 export { listRoomsHandler } from "./rooms.js";
 export {
+  changeBookingFromInput,
   createBookingFromInput,
   createBookingHandler,
   deleteBookingById,

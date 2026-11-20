@@ -5,6 +5,7 @@ import { OpenAPIHono, type RouteHandler } from "@hono/zod-openapi";
 import { requireTimeEditAuth, type AuthVars } from "./middleware/auth.js";
 import {
   allRoomBookingsRoute,
+  changeMyBookingRoute,
   createMyBookingRoute,
   deleteMyBookingRoute,
   listMyBookingsRoute,
@@ -13,6 +14,7 @@ import {
 } from "./openapi-routes.js";
 import {
   allRoomBookingsHandler,
+  changeBookingFromInput,
   createBookingFromInput,
   deleteBookingById,
   listBookingsHandler,
@@ -99,6 +101,15 @@ const deleteMyBookingOpenApiHandler: RouteHandler<
 };
 app.openapi(deleteMyBookingRoute, deleteMyBookingOpenApiHandler);
 
+const changeMyBookingOpenApiHandler: RouteHandler<
+  typeof changeMyBookingRoute,
+  { Variables: AuthVars }
+> = (c) => {
+  const { id } = c.req.valid("param");
+  return changeBookingFromInput(c, id, c.req.valid("json"));
+};
+app.openapi(changeMyBookingRoute, changeMyBookingOpenApiHandler);
+
 app.doc31("/openapi", {
   openapi: "3.1.0",
   info: {
@@ -119,7 +130,7 @@ app.doc31("/openapi", {
     },
     {
       name: "My bookings",
-      description: "List, create, and cancel your TimeEdit reservations",
+      description: "List, create, change, and cancel your TimeEdit reservations",
     },
   ],
 });
