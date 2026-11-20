@@ -6,6 +6,7 @@ import {
   MyBookingSchema,
   RoomsListSchema,
   cancelSuccessSchema,
+  changeBookingSchema,
   createBookingSchema,
   gatewayErrorSchema,
   loginFailedSchema,
@@ -196,6 +197,49 @@ export const deleteMyBookingRoute = createRoute({
     },
     502: {
       description: "Cancel failed at TimeEdit",
+      content: { "application/json": { schema: gatewayErrorSchema } },
+    },
+  },
+});
+
+export const changeMyBookingRoute = createRoute({
+  method: "patch",
+  path: "/api/my/bookings/{id}",
+  security: bearerSecurity,
+  tags: ["My bookings"],
+  summary: "Change the date and time of a booking",
+  description:
+    "Moves the booking to `interval` in the same room. The reservation id stays the same. If TimeEdit rejects the change, the booking keeps its old time.",
+  request: {
+    params: BookingIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: changeBookingSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      description: "Booking changed; `booking.id` is the unchanged reservation id",
+      content: { "application/json": { schema: reservationCreatedSchema } },
+    },
+    400: {
+      description: "Invalid request body",
+      content: { "application/json": { schema: validationErrorSchema } },
+    },
+    401: {
+      description: "Missing or invalid Authorization header",
+      content: { "application/json": { schema: unauthorizedSchema } },
+    },
+    404: {
+      description: "TimeEdit has no booking with this id for the user",
+      content: { "application/json": { schema: gatewayErrorSchema } },
+    },
+    409: {
+      description: "TimeEdit rejected the change, for example because the slot is taken or the length is invalid",
+      content: { "application/json": { schema: gatewayErrorSchema } },
+    },
+    502: {
+      description: "Change failed at TimeEdit",
       content: { "application/json": { schema: gatewayErrorSchema } },
     },
   },

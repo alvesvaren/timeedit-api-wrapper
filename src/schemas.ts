@@ -52,6 +52,12 @@ export const createBookingSchema = z
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
+export const changeBookingSchema = createBookingSchema
+  .pick({ interval: true })
+  .openapi("ChangeBookingRequest");
+
+export type ChangeBookingInput = z.infer<typeof changeBookingSchema>;
+
 export const cancelSuccessSchema = z
   .object({
     success: z.literal(true).openapi({ example: true }),

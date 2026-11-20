@@ -311,6 +311,67 @@ export async function fetchMyBookingsHtml(sessionCookie: string): Promise<string
   return res.text();
 }
 
+/** The reservation detail page. TimeEdit's UI posts edits of a booking to this URL. */
+function reservationPageUrl(reservationId: string): string {
+  return `${STUDENT}/my.html?h=t&sid=8&id=${encodeURIComponent(reservationId)}&fr=t&step=3&myp=t&objects=0&ef=2&nocache=2`;
+}
+
+export type ChangeBookingParams = {
+  reservationId: string;
+  /** yyyymmdd */
+  datesCompact: string;
+  /** H:mm */
+  startTime: string;
+  /** H:mm */
+  endTime: string;
+};
+
+export type ChangeBookingResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "rejected"; detail: string };
+
+/** TimeEdit's edit form sends times as HH.mm. */
+function toEditFormTime(time: string): string {
+  return time.replace(":", ".").padStart(5, "0");
+}
+
+/** Moves a booking to a new date and time, keeping its reservation id. */
+export async function changeBookingTime(
+  sessionCookie: string,
+  csrfToken: string,
+  p: ChangeBookingParams
+): Promise<ChangeBookingResult> {
+  const url = reservationPageUrl(p.reservationId);
+  const res = await fetch(url, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      Cookie: sessionCookie,
+      Origin: ORIGIN,
+      Referer: url,
+      "X-Requested-With": "XMLHttpRequest",
+      Accept: "*/*",
+      "User-Agent": timeEditUserAgent(),
+    },
+    body: new URLSearchParams({
+      ef: "3",
+      t: `${toEditFormTime(p.startTime)},${toEditFormTime(p.endTime)}`,
+      dates: p.datesCompact,
+      CSTT: csrfToken,
+    }),
+  });
+
+  const text = (await res.text()).trim();
+  if (res.ok) return { ok: true };
+  // TimeEdit answers 409 for a taken slot or an invalid length, and leaves the booking as it was.
+  if (res.status === 409) return { ok: false, reason: "rejected", detail: text };
+  if (res.status === 400 && text.includes("No reservations found")) {
+    return { ok: false, reason: "not_found", detail: text };
+  }
+  throw new Error(`TimeEdit change failed: ${res.status} ${text.slice(0, 500)}`);
+}
+
 export async function cancelBooking(
   sessionCookie: string,
   reservationId: string
@@ -327,7 +388,7 @@ export async function cancelBooking(
       Accept: "text/plain, */*; q=0.01",
       Cookie: sessionCookie,
       Origin: ORIGIN,
-      Referer: `${STUDENT}/my.html?h=t&sid=8&id=${encodeURIComponent(reservationId)}&fr=t&step=3&myp=t&objects=0&ef=2&nocache=2`,
+      Referer: reservationPageUrl(reservationId),
       "X-Requested-With": "XMLHttpRequest",
       "User-Agent": timeEditUserAgent(),
     },
